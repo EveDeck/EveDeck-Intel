@@ -106,6 +106,7 @@ object DesktopSession {
             initial = config,
             regionNames = regionNames,
             availableChannels = { registry.available.value },
+            currentChannels = { registry.selected.value },
             onChannelsChanged = { registry.select(it) },
             detectedRegions = detectedRegions,
             onRegionOverridesChanged = onRegionOverridesChanged,

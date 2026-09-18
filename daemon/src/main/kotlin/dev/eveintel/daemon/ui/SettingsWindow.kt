@@ -55,6 +55,8 @@ class SettingsWindow(
     private val initial: Config,
     private val regionNames: List<String>,
     private val availableChannels: () -> List<ChannelInfo>,
+    /** Live, not just what was selected when this window was built -- the tablet can change it. */
+    private val currentChannels: () -> Set<String>,
     private val onChannelsChanged: (Set<String>) -> Unit,
     /** Regions a channel's own MOTD claims to cover, shown as a hint next to its override. */
     private val detectedRegions: (channel: String) -> List<String>,
@@ -468,19 +470,22 @@ class SettingsWindow(
         runCatching { Desktop.getDesktop().browse(URI(url)) }
     }
 
-    /** Every channel worth showing: discovered, checked, or selected before this window opened. */
+    /** Every channel worth showing: discovered, checked here, or currently selected (e.g. from the tablet). */
     private fun knownChannelNames(): List<String> {
         val discovered = availableChannels().filterNot { it.reserved }.map { it.name }
-        return (discovered + channelChecks.filterValues { it.isSelected }.keys + initial.intelChannels)
+        return (discovered + channelChecks.filterValues { it.isSelected }.keys + currentChannels())
             .distinct()
             .sorted()
     }
 
     private fun refreshChannels() {
         val names = knownChannelNames()
+        // Only rebuilt when the known-channel *set* changes, not merely rechecked -- once the rows
+        // exist, whatever the user has toggled here (even unsaved) must survive a re-open of this
+        // window, or clicking Settings again mid-edit would silently discard it.
         if (names == channelChecks.keys.toList()) return
 
-        val selected = channelChecks.filterValues { it.isSelected }.keys + initial.intelChannels
+        val selected = channelChecks.filterValues { it.isSelected }.keys + currentChannels()
         channelChecks.clear()
         channelsPanel.removeAll()
         if (names.isEmpty()) {
