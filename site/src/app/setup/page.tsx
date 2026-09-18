@@ -6,7 +6,7 @@ import { FlowDiagram } from "@/components/flow-diagram";
 export const metadata: Metadata = {
   title: "Setup",
   description:
-    "Setting up EveDeck Intel: run the daemon, pick your channels and regions, copy the tablet URL, and install the app."
+    "Setting up EveDeck Intel: run the daemon, pick your channels, copy the tablet URL, and install the app — or just open the web feed on any phone or iPad."
 };
 
 export default function SetupPage() {
@@ -38,7 +38,7 @@ export default function SetupPage() {
         the symptom is a tablet that simply never connects.
       </p>
 
-      <h2>2. Pick your channels and regions</h2>
+      <h2>2. Pick your channels</h2>
       <p>
         The first run opens the settings window. Right-clicking the tray icon and choosing{" "}
         <em>Settings</em> gets you back to it any time.
@@ -53,11 +53,6 @@ export default function SetupPage() {
           ones you want read. If the list is empty or missing a channel, join it in game and wait for
           a line to appear — EVE only creates the file once there is something to put in it.
         </li>
-        <li>
-          <strong>Scope regions</strong> is the setting most worth getting right. People abbreviate
-          system names, and a three-character stub only has one answer if the daemon knows which
-          regions the channel is watching. Pick them from the list; the box above it filters.
-        </li>
       </ul>
       <p>
         <code>Local</code> is always read whether or not it appears in your selection, because it is
@@ -65,9 +60,16 @@ export default function SetupPage() {
         ticked.
       </p>
       <p>
-        Press <strong>Save</strong>. Channel selection takes effect immediately; the port, the log
-        folder and the regions apply when the daemon restarts, and the window tells you which of the
-        two just happened.
+        People abbreviate system names, and a three-character stub only has one answer if the daemon
+        knows which regions the channel is watching — it works this out on its own, straight from the
+        channel&apos;s own MOTD, so there is nothing to configure. The <strong>Region override</strong>{" "}
+        section only matters for a channel whose MOTD does not name usable regions; pick them there by
+        hand if abbreviations in that channel are resolving wrong.
+      </p>
+      <p>
+        Press <strong>Save</strong>. Channel selection and the region override both take effect
+        immediately; the port and the log folder apply when the daemon restarts, and the window tells
+        you which just happened.
       </p>
 
       <h2>3. Copy the tablet URL</h2>
@@ -82,14 +84,23 @@ export default function SetupPage() {
         is almost always the <code>192.168.x.x</code> address matching your router.
       </p>
 
-      <h2>4. Install the app</h2>
+      <h2>4. Install the app — or just open a browser</h2>
       <p>
         Download the APK on the tablet itself and open it. Android asks once whether to allow
         installs from your browser; allow it, then install. Open the app, go to its settings, paste
         the address from step 3, and choose a character to follow.
       </p>
       <p>
-        The character you follow is what jump distances are measured from, so pick whichever one is
+        <strong>On an iPad, iPhone, or anything that isn&apos;t Android</strong>, there is no app to
+        install — the daemon serves the same feed as a web page. Open{" "}
+        <code>http://192.168.1.50:31337/</code> (your PC&apos;s address from step 3, but{" "}
+        <code>http://</code> instead of <code>ws://</code>, and no <code>/intel</code>) in Safari or
+        any browser on the same network, then use <em>Share → Add to Home Screen</em> to give it an
+        icon like a real app. No account, no App Store, no install step beyond that.
+      </p>
+      <p>
+        Whichever you use, the character you follow (in the app&apos;s settings, or the web page&apos;s{" "}
+        <em>Settings</em> tab) is what jump distances are measured from, so pick whichever one is
         actually out there.
       </p>
 
@@ -105,8 +116,9 @@ export default function SetupPage() {
           <em>EveDeck Intel</em> for private networks in Windows Defender Firewall.
         </li>
         <li>
-          <strong>Systems are resolving to the wrong place.</strong> Your scope regions are wrong or
-          too broad. Narrow them to what the channel actually covers.
+          <strong>Systems are resolving to the wrong place.</strong> The channel&apos;s MOTD does not
+          name its regions the way the daemon expects, or names the wrong ones. Set a region override
+          for that channel in the settings window.
         </li>
         <li>
           <strong>Reports are showing up unparsed.</strong> Alliances have their own shorthand. The

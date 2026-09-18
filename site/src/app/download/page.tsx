@@ -16,6 +16,11 @@ export default function DownloadPage() {
       kicker="BOTH HALVES"
       intro="The daemon runs on the PC you play on. The app runs on the tablet. They find each other over your LAN, so you need both."
     >
+      <p className="mt-2 text-sm text-muted/80">
+        On an iPad, iPhone, or anything that isn&apos;t Android, skip the tablet app — the daemon
+        alone serves the same feed as a web page, no second download needed. See{" "}
+        <Link href="/setup">setting it up</Link> for the address to open.
+      </p>
       <div className="not-prose mt-2 grid gap-4 sm:grid-cols-2">
         {DOWNLOADS.map((item) => (
           <a
