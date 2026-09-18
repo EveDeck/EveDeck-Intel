@@ -8,6 +8,19 @@
 export const RELEASE_TAG = "intel-v0.1.2";
 export const VERSION = "0.1.2";
 
+/**
+ * Bullets for this version, read by /api/version so the daemon and the tablet app can show what
+ * changed -- update this alongside VERSION on every release, same source the GitHub release notes
+ * came from.
+ */
+export const CHANGELOG: string[] = [
+  "Added font size, icon size, text colour, glow and drop shadow controls to the feed, synced from the daemon to every connected tablet.",
+  "Added a live EVE-time clock to the tablet header, with a downtime indicator during the daily maintenance window.",
+  "Fixed several parser gaps: plural ship names, Chinese-client hull names, stylised pilot handles, and a pilot being listed twice when linked with their current ship.",
+  "Added system inference for terse follow-up reports with no system of their own.",
+  "Published measured RAM and CPU footprint numbers on the download page."
+];
+
 const BASE = `https://github.com/EveDeck/EveDeck-Intel/releases/download/${RELEASE_TAG}`;
 
 export const RELEASE_PAGE = `https://github.com/EveDeck/EveDeck-Intel/releases/tag/${RELEASE_TAG}`;
