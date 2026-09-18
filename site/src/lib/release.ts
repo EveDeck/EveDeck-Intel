@@ -8,10 +8,10 @@
 export const RELEASE_TAG = "intel-v0.1.2";
 export const VERSION = "0.1.2";
 
-const BASE = `https://github.com/EveDeck/EveDeck/releases/download/${RELEASE_TAG}`;
+const BASE = `https://github.com/EveDeck/EveDeck-Intel/releases/download/${RELEASE_TAG}`;
 
-export const RELEASE_PAGE = `https://github.com/EveDeck/EveDeck/releases/tag/${RELEASE_TAG}`;
-export const SOURCE_URL = "https://github.com/EveDeck/EveDeck/tree/main/intel";
+export const RELEASE_PAGE = `https://github.com/EveDeck/EveDeck-Intel/releases/tag/${RELEASE_TAG}`;
+export const SOURCE_URL = "https://github.com/EveDeck/EveDeck-Intel";
 
 export type Download = {
   id: string;

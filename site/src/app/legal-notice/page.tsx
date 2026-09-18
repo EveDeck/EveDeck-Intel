@@ -15,7 +15,7 @@ export default function LegalNoticePage() {
         EveDeck Intel is part of the EveDeck project and is free software: you can redistribute it
         and/or modify it under the terms of the{" "}
         <a
-          href="https://github.com/EveDeck/EveDeck/blob/main/LICENSE"
+          href="https://github.com/EveDeck/EveDeck-Intel/blob/main/LICENSE"
           target="_blank"
           rel="noopener noreferrer"
         >

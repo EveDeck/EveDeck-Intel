@@ -111,7 +111,7 @@ export default function SetupPage() {
         <li>
           <strong>Reports are showing up unparsed.</strong> Alliances have their own shorthand. The
           daemon can replay your own channel history and print what it failed to classify — see the{" "}
-          <a href="https://github.com/EveDeck/EveDeck/tree/main/intel">repository</a> for{" "}
+          <a href="https://github.com/EveDeck/EveDeck-Intel">repository</a> for{" "}
           <code>--validate</code>, which is how the vocabulary gets tuned.
         </li>
       </ul>
