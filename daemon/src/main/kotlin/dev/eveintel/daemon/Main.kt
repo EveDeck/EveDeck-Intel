@@ -70,6 +70,7 @@ fun main(args: Array<String>) {
     val registry = ChannelRegistry(config.chatLogsDirectory, selectedChannels)
     val pipeline = IntelPipeline(universe, parser, selectedChannels)
     val displaySettings = MutableStateFlow(config.displaySettings)
+    val updateInfo = MutableStateFlow<VersionInfo?>(null)
 
     val cacheDirectory = configPath.toAbsolutePath().parent.resolve("cache")
     val esi = dev.eveintel.daemon.esi.EsiClient()
@@ -117,6 +118,9 @@ fun main(args: Array<String>) {
         universeStatus.start(this)
         tailer.start(this)
 
+        // Startup only, no repeating timer -- matches the main EveDeck app's update banner.
+        launch { updateInfo.value = UpdateChecker.check() }
+
         if (useTray) {
             var tray: Tray? = null
             tray = DesktopSession.install(
@@ -129,6 +133,7 @@ fun main(args: Array<String>) {
                 registry = registry,
                 knownLocations = { pipeline.locations.value.size },
                 displaySettings = displaySettings,
+                updateInfo = updateInfo,
                 logFile = logFile,
                 openSettings = firstRun || args.contains("--settings"),
                 onExit = {

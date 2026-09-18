@@ -42,6 +42,10 @@ class IntelService : LifecycleService() {
         }
 
         lifecycleScope.launch {
+            IntelRepository.setAvailableUpdate(UpdateChecker.check(BuildConfig.VERSION_NAME))
+        }
+
+        lifecycleScope.launch {
             // Only the server address may tear the socket down. The alert settings are read fresh
             // per message, so this must not react to them: collecting the whole snapshot would
             // redial the WebSocket on every tick of the radius slider.

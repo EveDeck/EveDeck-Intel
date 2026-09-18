@@ -3,6 +3,7 @@ package dev.eveintel.daemon.ui
 import dev.eveintel.daemon.ChannelRegistry
 import dev.eveintel.daemon.Config
 import dev.eveintel.daemon.IntelServer
+import dev.eveintel.daemon.VersionInfo
 import dev.eveintel.model.DisplaySettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.nio.file.Files
@@ -87,6 +88,7 @@ object DesktopSession {
         registry: ChannelRegistry,
         knownLocations: () -> Int,
         displaySettings: MutableStateFlow<DisplaySettings>,
+        updateInfo: MutableStateFlow<VersionInfo?>,
         logFile: Path?,
         openSettings: Boolean = false,
         onExit: () -> Unit,
@@ -105,6 +107,7 @@ object DesktopSession {
             onChannelsChanged = { registry.select(it) },
             currentDisplay = { displaySettings.value },
             onDisplayChanged = { displaySettings.value = it },
+            updateInfo = updateInfo,
             status = {
                 val urls = IntelServer.localAddresses().map { "ws://$it:${config.port}/intel" }
                 buildList {

@@ -1,10 +1,13 @@
 package dev.eveintel.daemon.ui
 
 import dev.eveintel.daemon.Config
+import dev.eveintel.daemon.VersionInfo
 import dev.eveintel.model.DisplaySettings
 import dev.eveintel.wire.ChannelInfo
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Desktop
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridBagConstraints
@@ -12,6 +15,7 @@ import java.awt.GridBagLayout
 import java.awt.Insets
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
+import java.net.URI
 import java.nio.file.Path
 import javax.imageio.ImageIO
 import javax.swing.BorderFactory
@@ -53,11 +57,20 @@ class SettingsWindow(
     private val onChannelsChanged: (Set<String>) -> Unit,
     private val currentDisplay: () -> DisplaySettings,
     private val onDisplayChanged: (DisplaySettings) -> Unit,
+    private val updateInfo: MutableStateFlow<VersionInfo?>,
     private val status: () -> List<String>,
     private val tabletUrl: () -> String?,
     private val onRestart: (() -> Unit)?,
 ) {
     private var frame: JFrame? = null
+
+    /** Hides the banner for the rest of this window session; not persisted. */
+    private var updateDismissed = false
+    private val updateBanner = JPanel(BorderLayout(8, 0)).apply {
+        background = Theme.WARN
+        border = BorderFactory.createEmptyBorder(6, 10, 6, 10)
+        isVisible = false
+    }
 
     private val statusLabel = JLabel()
     private val logsField = JTextField(initial.chatLogsDirectory.toString(), 34)
@@ -167,6 +180,7 @@ class SettingsWindow(
             border = BorderFactory.createEmptyBorder(3, 0, 0, 14)
         }
 
+        add(updateBanner, 0, row++, width = 2)
         add(statusPanel(), 0, row++, width = 2)
 
         add(heading("Chat logs"), 0, row)
@@ -358,6 +372,7 @@ class SettingsWindow(
         }
         refreshChannels()
         refreshRegions()
+        refreshUpdateBanner()
 
         val display = currentDisplay()
         fontScaleSlider.value = (display.fontScale * 100).toInt().coerceIn(75, 175)
@@ -366,6 +381,52 @@ class SettingsWindow(
         textColorSwatch.background = textColor
         glowCheck.isSelected = display.glowEnabled
         dropShadowCheck.isSelected = display.dropShadowEnabled
+    }
+
+    private fun refreshUpdateBanner() {
+        val info = updateInfo.value
+        updateBanner.removeAll()
+        if (info == null || updateDismissed) {
+            updateBanner.isVisible = false
+            return
+        }
+        updateBanner.isVisible = true
+        updateBanner.add(
+            JLabel("EveDeck Intel ${info.version} is available").apply {
+                foreground = java.awt.Color.BLACK
+            },
+            BorderLayout.CENTER,
+        )
+        updateBanner.add(
+            transparent(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
+                isOpaque = false
+                if (info.daemonUrl != null) {
+                    add(
+                        JButton("Download").apply {
+                            addActionListener { openInBrowser(info.daemonUrl) }
+                        },
+                    )
+                }
+                add(
+                    JButton("×").apply {
+                        toolTipText = "Dismiss"
+                        addActionListener {
+                            updateDismissed = true
+                            refreshUpdateBanner()
+                            frame?.let { SwingUtilities.invokeLater { it.revalidate(); it.repaint() } }
+                        }
+                    },
+                )
+            },
+            BorderLayout.EAST,
+        )
+        updateBanner.revalidate()
+        updateBanner.repaint()
+    }
+
+    private fun openInBrowser(url: String) {
+        if (!Desktop.isDesktopSupported()) return
+        runCatching { Desktop.getDesktop().browse(URI(url)) }
     }
 
     private fun refreshChannels() {

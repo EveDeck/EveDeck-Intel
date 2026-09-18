@@ -26,6 +26,7 @@ data class IntelUiState(
     val stats: Map<Int, dev.eveintel.wire.SystemStats> = emptyMap(),
     /** Jump distance to every reachable system from the nearest of the alert characters. */
     val distances: Map<Int, Int> = emptyMap(),
+    val availableUpdate: VersionInfo? = null,
 ) {
     /** Where the alert characters currently are, for centring and for the settings list. */
     val alertLocations: List<CharacterLocation>
@@ -120,7 +121,7 @@ class IntelViewModel(application: Application) : AndroidViewModel(application) {
         base.copy(display = display)
     }
 
-    val state: StateFlow<IntelUiState> = combine(
+    private val withChannels = combine(
         withDisplay,
         IntelRepository.channels,
         IntelRepository.characters,
@@ -133,6 +134,13 @@ class IntelViewModel(application: Application) : AndroidViewModel(application) {
             sovereignty = sovereignty,
             stats = stats,
         )
+    }
+
+    val state: StateFlow<IntelUiState> = combine(
+        withChannels,
+        IntelRepository.availableUpdate,
+    ) { base, availableUpdate ->
+        base.copy(availableUpdate = availableUpdate)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), IntelUiState())
 
     init {

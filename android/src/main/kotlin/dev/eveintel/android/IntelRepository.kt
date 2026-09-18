@@ -72,6 +72,15 @@ object IntelRepository {
     private val _stats = MutableStateFlow<Map<Int, dev.eveintel.wire.SystemStats>>(emptyMap())
     val stats: StateFlow<Map<Int, dev.eveintel.wire.SystemStats>> = _stats.asStateFlow()
 
+    private val _availableUpdate = MutableStateFlow<VersionInfo?>(null)
+
+    /** Set once at startup by [UpdateChecker]; null until a strictly newer version is found. */
+    val availableUpdate: StateFlow<VersionInfo?> = _availableUpdate.asStateFlow()
+
+    fun setAvailableUpdate(info: VersionInfo?) {
+        _availableUpdate.value = info
+    }
+
     fun addCharacters(characters: List<dev.eveintel.wire.CharacterInfo>) {
         _characters.value = _characters.value + characters.associateBy { it.name }
     }

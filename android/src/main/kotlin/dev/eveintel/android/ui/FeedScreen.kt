@@ -1,7 +1,10 @@
 package dev.eveintel.android.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,12 +25,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -38,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.eveintel.android.ConnectionState
 import dev.eveintel.android.IntelUiState
+import dev.eveintel.android.VersionInfo
 import dev.eveintel.model.DisplaySettings
 import dev.eveintel.model.IntelMessage
 import dev.eveintel.model.Keyword
@@ -121,20 +130,87 @@ fun FeedScreen(state: IntelUiState, now: Long, modifier: Modifier = Modifier) {
         if (listState.firstVisibleItemIndex <= 2) listState.animateScrollToItem(0)
     }
 
-    if (state.messages.isEmpty()) {
-        EmptyFeed(state, modifier)
-        return
-    }
+    Column(modifier.fillMaxSize()) {
+        UpdateBanner(state.availableUpdate)
 
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        items(state.messages, key = { it.id }) { message ->
-            IntelRow(state = state, message = message, now = now)
+        if (state.messages.isEmpty()) {
+            EmptyFeed(state, Modifier.weight(1f))
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                items(state.messages, key = { it.id }) { message ->
+                    IntelRow(state = state, message = message, now = now)
+                }
+            }
         }
+    }
+}
+
+/**
+ * Dismissible startup notice that a newer release exists. Dismissal is local-only, cleared on the
+ * next app launch -- there is no per-session persistence, matching the desktop app's banner.
+ */
+@Composable
+private fun UpdateBanner(update: VersionInfo?) {
+    if (update == null) return
+    var dismissed by remember { mutableStateOf(false) }
+    if (dismissed) return
+
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(IntelColors.Accent.copy(alpha = 0.16f))
+            .border(1.dp, IntelColors.Accent.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "EveDeck Intel ${update.version} is available",
+                color = IntelColors.Accent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+            )
+            update.whatsNew.firstOrNull()?.let { bullet ->
+                Text(
+                    text = bullet,
+                    color = IntelColors.Muted,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+        if (update.apkUrl != null) {
+            Text(
+                text = "Download",
+                color = IntelColors.Accent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.apkUrl)))
+                    }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+        Text(
+            text = "×",
+            color = IntelColors.Muted,
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .clickable { dismissed = true }
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+        )
     }
 }
 
