@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>EveDeck Intel</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --surface: #131a24;
+    --surface-raised: #1b2432;
+    --text: #d7e1ec;
+    --muted: #7c8ba0;
+    --accent: #5fb3e8;
+    --clear: #4caf6e;
+    --warn: #e0a23c;
+    --hostile: #d9534f;
+    --divider: #232e3d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #header {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px 14px;
+    background: var(--surface); border-bottom: 1px solid var(--divider);
+  }
+  #header .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--hostile); flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  #header .dot.connected { background: var(--clear); }
+  #header .title { font-weight: 600; letter-spacing: 0.04em; font-size: 15px; }
+  #header .status { margin-left: auto; color: var(--muted); font-size: 12px; }
+  #feed { padding: 8px 10px 24px 10px; }
+  .row {
+    background: var(--surface); border: 1px solid var(--divider); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .row .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .row .system { font-size: 17px; font-weight: 700; color: var(--accent); font-family: ui-monospace, SFMono-Regular, monospace; }
+  .row .system.inferred { opacity: 0.55; font-style: italic; }
+  .row .age { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .row .chip {
+    display: inline-block; font-size: 11px; color: var(--muted);
+    background: var(--surface-raised); border-radius: 3px; padding: 2px 6px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .row .kw {
+    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
+    border-radius: 3px; padding: 2px 6px;
+  }
+  .row .kw.clear { color: var(--clear); background: rgba(76,175,110,0.12); }
+  .row .kw.hostile { color: var(--hostile); background: rgba(217,83,79,0.12); }
+  .row .kw.neutral { color: var(--warn); background: rgba(224,162,60,0.12); }
+  .row .body { margin-top: 6px; font-size: 14px; color: var(--text); display: flex; gap: 6px; flex-wrap: wrap; }
+  .row .ship { color: var(--text); }
+  .row .ship .count { color: var(--warn); font-weight: 600; }
+  .row .player { color: var(--muted); }
+  #empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div id="header">
+    <div class="dot" id="dot"></div>
+    <div class="title">INTEL</div>
+    <div class="status" id="status">connecting&hellip;</div>
+  </div>
+  <div id="feed"></div>
+  <div id="empty" style="display:none">Waiting for intel&hellip;</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Keyword -> label and colour class. Mirrors the app's CLEAR/hostile/neutral read at a glance.
+  var KEYWORD_LABEL = {
+    CLEAR: "CLEAR", STATUS: "STATUS", NO_VISUAL: "NV", SPIKE: "SPIKE", GATE_CAMP: "CAMP",
+    BUBBLES: "BUBBLES", WORMHOLE: "WH", CYNO: "CYNO", ESS: "ESS", SKYHOOK: "SKYHOOK",
+    COMBAT_PROBES: "PROBES", DOCKED: "DOCKED", D_SCAN: "D-SCAN", NEUTRAL: "NEUT", HOSTILE: "HOSTILE",
+  };
+  var HOSTILE_KEYWORDS = { SPIKE: 1, GATE_CAMP: 1, BUBBLES: 1, CYNO: 1, HOSTILE: 1, COMBAT_PROBES: 1 };
+  var QUESTION_LABEL = { LOCATION: "LOC?", SHIP_TYPE: "SHIP?", STATUS: "STATUS?", COUNT: "COUNT?" };
+
+  var HISTORY_CAP = 300;
+  var messages = []; // newest first
+  var feedEl = document.getElementById("feed");
+  var emptyEl = document.getElementById("empty");
+  var dotEl = document.getElementById("dot");
+  var statusEl = document.getElementById("status");
+
+  function keywordClass(kw) {
+    if (kw === "CLEAR") return "clear";
+    if (HOSTILE_KEYWORDS[kw]) return "hostile";
+    return "neutral";
+  }
+
+  function age(millis) {
+    var s = Math.max(0, Math.floor((Date.now() - millis) / 1000));
+    if (s < 60) return s + "s";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m";
+    var h = Math.floor(m / 60);
+    return h + "h";
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+  }
+
+  function tokensOfType(message, type) {
+    return message.tokens.filter(function (t) { return t.type === type; });
+  }
+
+  function renderRow(message) {
+    var systemToken = tokensOfType(message, "system")[0];
+    var keywords = tokensOfType(message, "keyword");
+    var ships = tokensOfType(message, "ship");
+    var players = tokensOfType(message, "player");
+    var questions = tokensOfType(message, "question");
+    var counts = tokensOfType(message, "count");
+
+    var top = '<div class="top">';
+    if (systemToken) {
+      top += '<span class="system' + (systemToken.inferred ? ' inferred' : '') + '">' +
+        escapeHtml(systemToken.name) + '</span>';
+    }
+    keywords.forEach(function (k) {
+      top += '<span class="kw ' + keywordClass(k.keyword) + '">' + (KEYWORD_LABEL[k.keyword] || k.keyword) + '</span>';
+    });
+    questions.forEach(function (q) {
+      top += '<span class="kw neutral">' + (QUESTION_LABEL[q.kind] || q.kind) + '</span>';
+    });
+    top += '<span class="chip">' + escapeHtml(message.channel) + '</span>';
+    top += '<span class="age" data-ts="' + message.timestampMillis + '">' + age(message.timestampMillis) + '</span>';
+    top += '</div>';
+
+    var bodyParts = [];
+    ships.forEach(function (s) {
+      bodyParts.push('<span class="ship">' + escapeHtml(s.name) +
+        (s.count ? ' <span class="count">x' + s.count + '</span>' : '') + '</span>');
+    });
+    players.forEach(function (p) {
+      bodyParts.push('<span class="player">' + escapeHtml(p.text.replace(/\*$/, '')) + '</span>');
+    });
+    counts.forEach(function (c) {
+      var prefix = c.modifier === "PLUS" ? "+" : c.modifier === "TOTAL" ? "=" : "";
+      bodyParts.push('<span class="ship">' + prefix + c.value + '</span>');
+    });
+    var body = bodyParts.length ? '<div class="body">' + bodyParts.join("") + '</div>' : '';
+
+    var row = document.createElement("div");
+    row.className = "row";
+    row.dataset.id = message.id;
+    row.innerHTML = top + body;
+    return row;
+  }
+
+  function render() {
+    emptyEl.style.display = messages.length ? "none" : "block";
+    var nearTop = feedEl.firstChild ? window.scrollY < 40 : true;
+    feedEl.innerHTML = "";
+    var frag = document.createDocumentFragment();
+    messages.forEach(function (m) { frag.appendChild(renderRow(m)); });
+    feedEl.appendChild(frag);
+    if (nearTop) window.scrollTo(0, 0);
+  }
+
+  function addMessage(message) {
+    if (messages.some(function (m) { return m.id === message.id; })) return;
+    messages.unshift(message);
+    if (messages.length > HISTORY_CAP) messages.length = HISTORY_CAP;
+    render();
+  }
+
+  // Only the age labels need to change every second, not a full re-render.
+  setInterval(function () {
+    document.querySelectorAll(".age[data-ts]").forEach(function (el) {
+      el.textContent = age(Number(el.dataset.ts));
+    });
+  }, 1000);
+
+  function setStatus(connected, text) {
+    dotEl.className = "dot" + (connected ? " connected" : "");
+    statusEl.textContent = text;
+  }
+
+  function connect() {
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    var ws = new WebSocket(proto + "//" + location.host + "/intel");
+    var backoff = 1000;
+
+    ws.onopen = function () {
+      backoff = 1000;
+      setStatus(true, "live");
+      try { ws.send(JSON.stringify({ type: "hello", deviceName: "web:" + (navigator.userAgent || "browser"), protocolVersion: 1 })); } catch (e) {}
+    };
+
+    ws.onmessage = function (event) {
+      var data;
+      try { data = JSON.parse(event.data); } catch (e) { return; }
+      switch (data.type) {
+        case "snapshot":
+          messages = (data.messages || []).slice().reverse();
+          if (messages.length > HISTORY_CAP) messages.length = HISTORY_CAP;
+          render();
+          break;
+        case "intel":
+          addMessage(data.message);
+          break;
+        case "heartbeat":
+          setStatus(true, "live");
+          break;
+        default:
+          break; // location/channels/characters/sovereignty/stats/display: not used by this minimal client.
+      }
+    };
+
+    ws.onclose = function () {
+      setStatus(false, "reconnecting…");
+      setTimeout(connect, backoff);
+      backoff = Math.min(backoff * 2, 10000);
+    };
+    ws.onerror = function () { ws.close(); };
+  }
+
+  connect();
+})();
+</script>
+</body>
+</html>

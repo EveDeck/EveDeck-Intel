@@ -90,6 +90,20 @@ class IntelServer(
                 timeoutMillis = 45.seconds.inWholeMilliseconds
             }
             routing {
+                // A minimal read-only feed viewer, same origin as the WebSocket below so it works
+                // over plain http with no TLS/mixed-content complications. Meant for a phone or
+                // iPad: open this URL in Safari and "Add to Home Screen" -- no app store, no
+                // Apple developer account, no native build needed.
+                get("/") {
+                    val bytes = IntelServer::class.java.classLoader.getResourceAsStream("web/index.html")
+                        ?.use { it.readBytes() }
+                    if (bytes == null) {
+                        call.respond(HttpStatusCode.NotFound)
+                    } else {
+                        call.respondBytes(bytes = bytes, contentType = ContentType.Text.Html)
+                    }
+                }
+
                 // Image proxy: the tablet asks the daemon, the daemon asks the CDN once.
                 get("/img/{category}/{id}/{variant}") {
                     val category = call.parameters["category"].orEmpty()
