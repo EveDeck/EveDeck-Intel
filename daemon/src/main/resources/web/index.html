@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>EveDeck Intel</title>
@@ -19,15 +19,17 @@
     --hostile: #d9534f;
     --divider: #232e3d;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0; padding: 0; height: 100%;
+    margin: 0; padding: 0; height: 100%; overflow: hidden;
     background: var(--bg); color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
   #header {
-    position: sticky; top: 0; z-index: 10;
+    flex: 0 0 auto; z-index: 10;
     display: flex; align-items: center; gap: 10px;
     padding: calc(10px + env(safe-area-inset-top)) 14px 10px 14px;
     background: var(--surface); border-bottom: 1px solid var(--divider);
@@ -38,88 +40,277 @@
     transition: background 0.2s;
   }
   #header .dot.connected { background: var(--clear); }
+  #header .titles { display: flex; flex-direction: column; line-height: 1.25; }
   #header .title { font-weight: 600; letter-spacing: 0.04em; font-size: 15px; }
+  #header .subtitle { color: var(--muted); font-size: 11px; }
   #header .status { margin-left: auto; color: var(--muted); font-size: 12px; }
-  #feed { padding: 8px 10px 24px 10px; }
+
+  #views { flex: 1 1 auto; min-height: 0; position: relative; }
+  .view { position: absolute; inset: 0; overflow: auto; display: none; -webkit-overflow-scrolling: touch; }
+  .view.active { display: block; }
+
+  #view-feed { padding: 8px 10px 24px 10px; }
+  #empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+
   .row {
     background: var(--surface); border: 1px solid var(--divider); border-radius: 8px;
     padding: 10px 12px; margin-bottom: 8px;
   }
-  .row .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .row .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .row .system { font-size: 17px; font-weight: 700; color: var(--accent); font-family: ui-monospace, SFMono-Regular, monospace; }
   .row .system.inferred { opacity: 0.55; font-style: italic; }
   .row .age { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .row .chip {
+  .chip {
     display: inline-block; font-size: 11px; color: var(--muted);
     background: var(--surface-raised); border-radius: 3px; padding: 2px 6px;
     font-family: ui-monospace, SFMono-Regular, monospace;
   }
-  .row .kw {
+  .kw {
     display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
     border-radius: 3px; padding: 2px 6px;
   }
-  .row .kw.clear { color: var(--clear); background: rgba(76,175,110,0.12); }
-  .row .kw.hostile { color: var(--hostile); background: rgba(217,83,79,0.12); }
-  .row .kw.neutral { color: var(--warn); background: rgba(224,162,60,0.12); }
-  .row .body { margin-top: 6px; font-size: 14px; color: var(--text); display: flex; gap: 6px; flex-wrap: wrap; }
-  .row .ship { color: var(--text); }
-  .row .ship .count { color: var(--warn); font-weight: 600; }
-  .row .player { color: var(--muted); }
-  #empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+  .kw.clear { color: var(--clear); background: rgba(76,175,110,0.12); }
+  .kw.hostile { color: var(--hostile); background: rgba(217,83,79,0.12); }
+  .kw.neutral { color: var(--warn); background: rgba(224,162,60,0.12); }
+  .jump {
+    font-size: 11px; font-weight: 700; border-radius: 3px; padding: 2px 7px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+  .jump.here { color: #fff; background: var(--hostile); }
+  .jump.near { color: var(--hostile); background: rgba(217,83,79,0.15); }
+  .jump.mid { color: var(--warn); background: rgba(224,162,60,0.15); }
+  .jump.far { color: var(--muted); background: var(--surface-raised); }
+  .row .body { margin-top: 8px; font-size: 14px; color: var(--text); display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill { display: flex; align-items: center; gap: 5px; }
+  .pill img { width: 22px; height: 22px; border-radius: 4px; background: var(--surface-raised); object-fit: cover; }
+  .pill .count { color: var(--warn); font-weight: 600; }
+  .pill.player { color: var(--muted); }
+
+  /* Map */
+  #view-map { padding: 0; touch-action: none; }
+  #map-canvas { display: block; width: 100%; height: 100%; background: var(--bg); }
+  #map-hint {
+    position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+    color: var(--muted); font-size: 11px; background: rgba(19,26,36,0.8);
+    padding: 4px 8px; border-radius: 4px; pointer-events: none;
+  }
+
+  /* Settings */
+  #view-settings { padding: 14px; }
+  .section { margin-bottom: 22px; }
+  .section h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin: 0 0 10px 0; font-weight: 600;
+  }
+  .channel-row, .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 4px; border-bottom: 1px solid var(--divider); font-size: 14px;
+  }
+  .channel-row:last-child, .toggle-row:last-child { border-bottom: none; }
+  .channel-row .name { font-family: ui-monospace, SFMono-Regular, monospace; }
+  .slider-row { padding: 8px 4px; }
+  .slider-row label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type="range"] { width: 100%; }
+  input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch {
+    width: 28px; height: 28px; border-radius: 6px; border: 2px solid transparent; cursor: pointer;
+  }
+  .swatch.selected { border-color: var(--accent); }
+
+  /* Nav */
+  #nav {
+    flex: 0 0 auto; display: flex; background: var(--surface);
+    border-top: 1px solid var(--divider);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #nav button {
+    flex: 1; background: none; border: none; color: var(--muted);
+    padding: 10px 0 8px 0; font-size: 11px; font-family: inherit;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  #nav button.active { color: var(--accent); }
+  #nav button svg { width: 22px; height: 22px; fill: currentColor; }
 </style>
 </head>
 <body>
+<div id="app">
   <div id="header">
     <div class="dot" id="dot"></div>
-    <div class="title">INTEL</div>
+    <div class="titles">
+      <div class="title" id="title">INTEL</div>
+      <div class="subtitle" id="subtitle">&nbsp;</div>
+    </div>
     <div class="status" id="status">connecting&hellip;</div>
   </div>
-  <div id="feed"></div>
-  <div id="empty" style="display:none">Waiting for intel&hellip;</div>
+
+  <div id="views">
+    <div class="view active" id="view-feed">
+      <div id="feed"></div>
+      <div id="empty" style="display:none">Waiting for intel&hellip;</div>
+    </div>
+
+    <div class="view" id="view-map">
+      <canvas id="map-canvas"></canvas>
+      <div id="map-hint">drag to pan &middot; pinch/scroll to zoom</div>
+    </div>
+
+    <div class="view" id="view-settings">
+      <div class="section">
+        <h2>Intel channels</h2>
+        <div id="channel-list"></div>
+      </div>
+      <div class="section">
+        <h2>Feed appearance</h2>
+        <div class="slider-row">
+          <label><span>Font size</span><span id="fontScaleLabel">100%</span></label>
+          <input type="range" id="fontScale" min="75" max="175" step="5">
+        </div>
+        <div class="slider-row">
+          <label><span>Icon size</span><span id="iconScaleLabel">100%</span></label>
+          <input type="range" id="iconScale" min="75" max="175" step="5">
+        </div>
+        <div class="slider-row">
+          <label><span>Text colour</span></label>
+          <div class="swatches" id="colorSwatches"></div>
+        </div>
+        <div class="toggle-row"><span>Glow</span><input type="checkbox" id="glow"></div>
+        <div class="toggle-row"><span>Drop shadow</span><input type="checkbox" id="dropShadow"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="nav">
+    <button class="active" data-view="feed">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h16v2H4z"/></svg>
+      Intel
+    </button>
+    <button data-view="map">
+      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.9 6H15.5a17 17 0 0 0-1.2-3.5A8 8 0 0 1 18.9 8zM12 4c.8 1.1 1.5 2.5 1.9 4h-3.8c.4-1.5 1.1-2.9 1.9-4zM4.3 14a8 8 0 0 1 0-4h3.9a17 17 0 0 0 0 4H4.3zm.8 2h3.4c.3 1.3.8 2.5 1.2 3.5A8 8 0 0 1 5.1 16zm3.4-8H5.1a8 8 0 0 1 4.6-3.5c-.4 1-.9 2.2-1.2 3.5zM12 20c-.8-1.1-1.5-2.5-1.9-4h3.8c-.4 1.5-1.1 2.9-1.9 4zm2.3-6H9.7a15 15 0 0 1 0-4h4.6a15 15 0 0 1 0 4zm.1 5.5c.5-1 .9-2.2 1.2-3.5h3.4a8 8 0 0 1-4.6 3.5zm1.6-5.5a17 17 0 0 0 0-4h3.9a8 8 0 0 1 0 4z"/></svg>
+      Map
+    </button>
+    <button data-view="settings">
+      <svg viewBox="0 0 24 24"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.4 1a7.5 7.5 0 0 0-1.7-1L14.5 2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.3 2.6a7.5 7.5 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6l2 1.6a7.4 7.4 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.4-1c.5.4 1.1.8 1.7 1l.3 2.6c0 .2.3.4.5.4h4c.2 0 .5-.2.5-.4l.3-2.6c.6-.2 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+      Settings
+    </button>
+  </div>
+</div>
 
 <script>
 (function () {
   "use strict";
 
-  // Keyword -> label and colour class. Mirrors the app's CLEAR/hostile/neutral read at a glance.
-  var KEYWORD_LABEL = {
-    CLEAR: "CLEAR", STATUS: "STATUS", NO_VISUAL: "NV", SPIKE: "SPIKE", GATE_CAMP: "CAMP",
-    BUBBLES: "BUBBLES", WORMHOLE: "WH", CYNO: "CYNO", ESS: "ESS", SKYHOOK: "SKYHOOK",
-    COMBAT_PROBES: "PROBES", DOCKED: "DOCKED", D_SCAN: "D-SCAN", NEUTRAL: "NEUT", HOSTILE: "HOSTILE",
+  // ---------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------
+  var state = {
+    messages: [],       // newest first
+    locations: {},      // characterName -> {characterId?, systemId, systemName, sinceMillis}
+    characters: {},     // name -> CharacterInfo
+    channels: { available: [], selected: [] },
+    display: { fontScale: 1, iconScale: 1, textColor: "#D7E1EC", glowEnabled: false, dropShadowEnabled: false },
+    sovereignty: { holders: [], systems: {} },
+    stats: {},           // systemId -> SystemStats
+    scopeRegionIds: [],
   };
-  var HOSTILE_KEYWORDS = { SPIKE: 1, GATE_CAMP: 1, BUBBLES: 1, CYNO: 1, HOSTILE: 1, COMBAT_PROBES: 1 };
-  var QUESTION_LABEL = { LOCATION: "LOC?", SHIP_TYPE: "SHIP?", STATUS: "STATUS?", COUNT: "COUNT?" };
-
+  var universe = { loaded: false, systemsById: {}, regionNames: {}, adjacency: {} };
   var HISTORY_CAP = 300;
-  var messages = []; // newest first
-  var feedEl = document.getElementById("feed");
-  var emptyEl = document.getElementById("empty");
-  var dotEl = document.getElementById("dot");
-  var statusEl = document.getElementById("status");
+  var activeView = "feed";
 
-  function keywordClass(kw) {
-    if (kw === "CLEAR") return "clear";
-    if (HOSTILE_KEYWORDS[kw]) return "hostile";
-    return "neutral";
-  }
-
-  function age(millis) {
-    var s = Math.max(0, Math.floor((Date.now() - millis) / 1000));
-    if (s < 60) return s + "s";
-    var m = Math.floor(s / 60);
-    if (m < 60) return m + "m";
-    var h = Math.floor(m / 60);
-    return h + "h";
-  }
-
+  // ---------------------------------------------------------------------
+  // Small helpers
+  // ---------------------------------------------------------------------
   function escapeHtml(text) {
     var div = document.createElement("div");
     div.textContent = text == null ? "" : String(text);
     return div.innerHTML;
   }
-
   function tokensOfType(message, type) {
     return message.tokens.filter(function (t) { return t.type === type; });
+  }
+  function age(millis) {
+    var s = Math.max(0, Math.floor((Date.now() - millis) / 1000));
+    if (s < 60) return s + "s";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m";
+    return Math.floor(m / 60) + "h";
+  }
+  function imgUrl(category, id, variant, size) {
+    return "/img/" + category + "/" + id + "/" + variant + "?size=" + (size || 64);
+  }
+
+  // ---------------------------------------------------------------------
+  // Universe (systems/regions/stargates), fetched once for jump distance
+  // and the map -- same static data the Android app bundles.
+  // ---------------------------------------------------------------------
+  function loadUniverse() {
+    fetch("/universe.json").then(function (r) { return r.json(); }).then(function (dto) {
+      dto.regions.forEach(function (r) { universe.regionNames[r.i] = r.n; });
+      dto.systems.forEach(function (s) {
+        universe.systemsById[s.i] = {
+          id: s.i, name: s.n, regionId: s.r, regionName: universe.regionNames[s.r] || "Unknown",
+          security: s.s, x: s.x, y: s.y, z: s.z,
+        };
+      });
+      dto.jumps.forEach(function (pair) {
+        var a = pair[0], b = pair[1];
+        (universe.adjacency[a] = universe.adjacency[a] || []).push(b);
+        (universe.adjacency[b] = universe.adjacency[b] || []).push(a);
+      });
+      universe.loaded = true;
+      mapView.fit();
+      renderActive();
+    }).catch(function () { /* map/jumps just stay unavailable */ });
+  }
+
+  /** Jump distance from the nearest of several origins -- mirrors Universe.distancesFrom(origins). */
+  function distancesFrom(origins) {
+    var dist = {};
+    var frontier = origins.filter(function (id) { return universe.systemsById[id]; });
+    frontier.forEach(function (id) { dist[id] = 0; });
+    var depth = 0;
+    while (frontier.length) {
+      depth++;
+      var next = [];
+      for (var i = 0; i < frontier.length; i++) {
+        var neighbours = universe.adjacency[frontier[i]] || [];
+        for (var j = 0; j < neighbours.length; j++) {
+          var nb = neighbours[j];
+          if (!(nb in dist)) { dist[nb] = depth; next.push(nb); }
+        }
+      }
+      frontier = next;
+    }
+    return dist;
+  }
+
+  function knownOrigins() {
+    return Object.keys(state.locations).map(function (name) { return state.locations[name].systemId; });
+  }
+
+  // ---------------------------------------------------------------------
+  // Feed
+  // ---------------------------------------------------------------------
+  function keywordClass(kw) {
+    if (kw === "CLEAR") return "clear";
+    if (kw === "SPIKE" || kw === "GATE_CAMP" || kw === "BUBBLES" || kw === "CYNO" || kw === "HOSTILE" || kw === "COMBAT_PROBES") return "hostile";
+    return "neutral";
+  }
+  var KEYWORD_LABEL = {
+    CLEAR: "CLEAR", STATUS: "STATUS", NO_VISUAL: "NV", SPIKE: "SPIKE", GATE_CAMP: "CAMP",
+    BUBBLES: "BUBBLES", WORMHOLE: "WH", CYNO: "CYNO", ESS: "ESS", SKYHOOK: "SKYHOOK",
+    COMBAT_PROBES: "PROBES", DOCKED: "DOCKED", D_SCAN: "D-SCAN", NEUTRAL: "NEUT", HOSTILE: "HOSTILE",
+  };
+  var QUESTION_LABEL = { LOCATION: "LOC?", SHIP_TYPE: "SHIP?", STATUS: "STATUS?", COUNT: "COUNT?" };
+
+  function jumpBadge(systemId) {
+    var origins = knownOrigins();
+    if (!universe.loaded || !origins.length || systemId == null) return "";
+    var dist = distancesFrom(origins)[systemId];
+    if (dist == null) return '<span class="jump far">&mdash;</span>';
+    if (dist === 0) return '<span class="jump here">HERE</span>';
+    var cls = dist <= 2 ? "near" : dist <= 5 ? "mid" : "far";
+    return '<span class="jump ' + cls + '">' + dist + 'j</span>';
   }
 
   function renderRow(message) {
@@ -129,11 +320,13 @@
     var players = tokensOfType(message, "player");
     var questions = tokensOfType(message, "question");
     var counts = tokensOfType(message, "count");
+    var iconSize = Math.round(22 * (state.display.iconScale || 1));
 
     var top = '<div class="top">';
     if (systemToken) {
-      top += '<span class="system' + (systemToken.inferred ? ' inferred' : '') + '">' +
-        escapeHtml(systemToken.name) + '</span>';
+      top += '<span class="system' + (systemToken.inferred ? ' inferred' : '') + '">' + escapeHtml(systemToken.name) + '</span>';
+      var region = universe.systemsById[systemToken.systemId] && universe.systemsById[systemToken.systemId].regionName;
+      if (region) top += '<span class="chip">' + escapeHtml(region) + '</span>';
     }
     keywords.forEach(function (k) {
       top += '<span class="kw ' + keywordClass(k.keyword) + '">' + (KEYWORD_LABEL[k.keyword] || k.keyword) + '</span>';
@@ -142,57 +335,314 @@
       top += '<span class="kw neutral">' + (QUESTION_LABEL[q.kind] || q.kind) + '</span>';
     });
     top += '<span class="chip">' + escapeHtml(message.channel) + '</span>';
+    if (systemToken) top += jumpBadge(systemToken.systemId);
     top += '<span class="age" data-ts="' + message.timestampMillis + '">' + age(message.timestampMillis) + '</span>';
     top += '</div>';
 
-    var bodyParts = [];
+    var body = [];
     ships.forEach(function (s) {
-      bodyParts.push('<span class="ship">' + escapeHtml(s.name) +
-        (s.count ? ' <span class="count">x' + s.count + '</span>' : '') + '</span>');
+      var icon = s.typeId ? '<img loading="lazy" onerror="this.remove()" src="' + imgUrl("types", s.typeId, "icon", iconSize <= 32 ? 32 : 64) + '" width="' + iconSize + '" height="' + iconSize + '">' : "";
+      body.push('<span class="pill">' + icon + '<span>' + escapeHtml(s.name) + (s.count ? ' <span class="count">x' + s.count + '</span>' : '') + '</span></span>');
     });
     players.forEach(function (p) {
-      bodyParts.push('<span class="player">' + escapeHtml(p.text.replace(/\*$/, '')) + '</span>');
+      var name = p.text.replace(/\*$/, "");
+      var characterId = state.characters[name] && state.characters[name].characterId;
+      var icon = characterId ? '<img loading="lazy" onerror="this.remove()" src="' + imgUrl("characters", characterId, "portrait", iconSize <= 32 ? 32 : 64) + '" width="' + iconSize + '" height="' + iconSize + '">' : "";
+      body.push('<span class="pill player">' + icon + '<span>' + escapeHtml(name) + '</span></span>');
     });
     counts.forEach(function (c) {
       var prefix = c.modifier === "PLUS" ? "+" : c.modifier === "TOTAL" ? "=" : "";
-      bodyParts.push('<span class="ship">' + prefix + c.value + '</span>');
+      body.push('<span class="pill">' + prefix + c.value + '</span>');
     });
-    var body = bodyParts.length ? '<div class="body">' + bodyParts.join("") + '</div>' : '';
 
     var row = document.createElement("div");
     row.className = "row";
-    row.dataset.id = message.id;
-    row.innerHTML = top + body;
+    row.innerHTML = top + (body.length ? '<div class="body">' + body.join("") + '</div>' : "");
     return row;
   }
 
-  function render() {
-    emptyEl.style.display = messages.length ? "none" : "block";
-    var nearTop = feedEl.firstChild ? window.scrollY < 40 : true;
+  function renderFeed() {
+    var feedEl = document.getElementById("feed");
+    var emptyEl = document.getElementById("empty");
+    emptyEl.style.display = state.messages.length ? "none" : "block";
+    var nearTop = document.getElementById("view-feed").scrollTop < 40;
     feedEl.innerHTML = "";
     var frag = document.createDocumentFragment();
-    messages.forEach(function (m) { frag.appendChild(renderRow(m)); });
+    state.messages.forEach(function (m) { frag.appendChild(renderRow(m)); });
     feedEl.appendChild(frag);
-    if (nearTop) window.scrollTo(0, 0);
+    if (nearTop) document.getElementById("view-feed").scrollTop = 0;
   }
 
   function addMessage(message) {
-    if (messages.some(function (m) { return m.id === message.id; })) return;
-    messages.unshift(message);
-    if (messages.length > HISTORY_CAP) messages.length = HISTORY_CAP;
-    render();
+    if (state.messages.some(function (m) { return m.id === message.id; })) return;
+    state.messages.unshift(message);
+    if (state.messages.length > HISTORY_CAP) state.messages.length = HISTORY_CAP;
+    if (activeView === "feed") renderFeed();
   }
 
-  // Only the age labels need to change every second, not a full re-render.
   setInterval(function () {
     document.querySelectorAll(".age[data-ts]").forEach(function (el) {
       el.textContent = age(Number(el.dataset.ts));
     });
   }, 1000);
 
+  // ---------------------------------------------------------------------
+  // Map -- systems as dots, pan/zoom, sovereignty colour, recent intel glow.
+  // Deliberately simpler than the app's map (no jump-range rings): this is
+  // a glance view, not a replacement for it.
+  // ---------------------------------------------------------------------
+  var mapView = (function () {
+    var canvas = document.getElementById("map-canvas");
+    var ctx = canvas.getContext("2d");
+    var cam = { x: 0, y: 0, scale: 1 };
+    var dragging = null;
+    var pinch = null;
+
+    function resize() {
+      var rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * devicePixelRatio;
+      canvas.height = rect.height * devicePixelRatio;
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = rect.height + "px";
+    }
+    window.addEventListener("resize", resize);
+
+    /** Centres and scales on every known system the first time universe data arrives. */
+    function fit() {
+      var ids = Object.keys(universe.systemsById);
+      if (!ids.length) return;
+      var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      ids.forEach(function (id) {
+        var s = universe.systemsById[id];
+        if (s.x < minX) minX = s.x; if (s.x > maxX) maxX = s.x;
+        if (s.z < minZ) minZ = s.z; if (s.z > maxZ) maxZ = s.z;
+      });
+      cam.minX = minX; cam.maxX = maxX; cam.minZ = minZ; cam.maxZ = maxZ;
+      cam.x = 0.5; cam.y = 0.5; cam.scale = 1;
+    }
+
+    function project(s) {
+      var rect = canvas.getBoundingClientRect();
+      var spanX = (cam.maxX - cam.minX) || 1;
+      var spanZ = (cam.maxZ - cam.minZ) || 1;
+      var nx = (s.x - cam.minX) / spanX;
+      var nz = (s.z - cam.minZ) / spanZ;
+      var size = Math.min(rect.width, rect.height) * cam.scale;
+      return {
+        x: (nx - cam.x) * size + rect.width / 2,
+        y: (nz - cam.y) * size + rect.height / 2,
+      };
+    }
+
+    function sovColor(holderId) {
+      var hue = Number(BigInt(holderId) % 360n);
+      return "hsl(" + hue + ", 55%, 45%)";
+    }
+
+    function draw() {
+      if (activeView !== "map" || !universe.loaded) return;
+      var rect = canvas.getBoundingClientRect();
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      var now = Date.now();
+      var recent = {}; // systemId -> "clear" | "hostile", most recent within 10 min
+      state.messages.forEach(function (m) {
+        if (now - m.timestampMillis > 10 * 60 * 1000) return;
+        var sysTok = tokensOfType(m, "system")[0];
+        if (!sysTok) return;
+        if (recent[sysTok.systemId]) return; // messages are newest-first already
+        var kws = tokensOfType(m, "keyword").map(function (k) { return k.keyword; });
+        recent[sysTok.systemId] = kws.indexOf("CLEAR") >= 0 ? "clear" : "hostile";
+      });
+
+      var origins = {};
+      knownOrigins().forEach(function (id) { origins[id] = true; });
+
+      Object.keys(universe.systemsById).forEach(function (id) {
+        var s = universe.systemsById[id];
+        var p = project(s);
+        if (p.x < -20 || p.x > rect.width + 20 || p.y < -20 || p.y > rect.height + 20) return;
+
+        var holder = state.sovereignty.systems[id];
+        var color = holder ? sovColor(holder) : (s.security >= 0.45 ? "#3a4a5c" : "#2a3644");
+        var r = Math.max(1.4, 1.4 * cam.scale);
+
+        if (recent[id]) {
+          ctx.beginPath();
+          ctx.fillStyle = recent[id] === "clear" ? "rgba(76,175,110,0.5)" : "rgba(217,83,79,0.6)";
+          ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.fillStyle = origins[id] ? "#5fb3e8" : color;
+        ctx.arc(p.x, p.y, origins[id] ? r * 2 : r, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (cam.scale > 3.5 || origins[id] || recent[id]) {
+          ctx.fillStyle = "#7c8ba0";
+          ctx.font = "10px ui-monospace, monospace";
+          ctx.fillText(s.name, p.x + 5, p.y + 3);
+        }
+      });
+    }
+
+    function toLocal(clientX, clientY) {
+      var rect = canvas.getBoundingClientRect();
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    canvas.addEventListener("pointerdown", function (e) {
+      canvas.setPointerCapture(e.pointerId);
+      dragging = { id: e.pointerId, last: toLocal(e.clientX, e.clientY) };
+    });
+    canvas.addEventListener("pointermove", function (e) {
+      if (!dragging || dragging.id !== e.pointerId) return;
+      var p = toLocal(e.clientX, e.clientY);
+      var rect = canvas.getBoundingClientRect();
+      var size = Math.min(rect.width, rect.height) * cam.scale;
+      cam.x -= (p.x - dragging.last.x) / size;
+      cam.y -= (p.y - dragging.last.y) / size;
+      dragging.last = p;
+      draw();
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (evt) {
+      canvas.addEventListener(evt, function () { dragging = null; });
+    });
+    canvas.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      cam.scale = Math.min(20, Math.max(0.3, cam.scale * (e.deltaY < 0 ? 1.15 : 0.87)));
+      draw();
+    }, { passive: false });
+
+    // Pinch-to-zoom for iPad: track two touches' distance independently of the pointer-drag above.
+    var activeTouches = {};
+    canvas.addEventListener("touchstart", function (e) {
+      Array.prototype.forEach.call(e.touches, function (t) { activeTouches[t.identifier] = t; });
+      if (e.touches.length === 2) pinch = { start: touchDistance(e.touches), scale: cam.scale };
+    }, { passive: true });
+    canvas.addEventListener("touchmove", function (e) {
+      if (e.touches.length === 2 && pinch) {
+        cam.scale = Math.min(20, Math.max(0.3, pinch.scale * (touchDistance(e.touches) / pinch.start)));
+        draw();
+      }
+    }, { passive: true });
+    canvas.addEventListener("touchend", function (e) {
+      if (e.touches.length < 2) pinch = null;
+    }, { passive: true });
+    function touchDistance(touches) {
+      var dx = touches[0].clientX - touches[1].clientX;
+      var dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy) || 1;
+    }
+
+    return { resize: resize, fit: fit, draw: draw };
+  })();
+
+  // ---------------------------------------------------------------------
+  // Settings -- channel selection and feed appearance, both round-tripped
+  // to the daemon exactly like the tablet's Settings tab. Per-device-only
+  // things (alert characters, alert radius) live on the tablet/app, not
+  // here, since there is nothing on the daemon side to sync them against.
+  // ---------------------------------------------------------------------
+  var COLOR_PRESETS = ["#D7E1EC", "#FFD37A", "#8FD9A8", "#FF9E9E", "#B7A6FF", "#9FE0E6"];
+  var sendClientMessage; // set once the socket exists
+
+  function renderSettings() {
+    var list = document.getElementById("channel-list");
+    var known = state.channels.available.filter(function (c) { return !c.reserved; });
+    list.innerHTML = known.length
+      ? known.map(function (c) {
+        var checked = state.channels.selected.indexOf(c.name) >= 0;
+        return '<div class="channel-row"><span class="name">' + escapeHtml(c.name) + '</span>' +
+          '<input type="checkbox" data-channel="' + escapeHtml(c.name) + '" ' + (checked ? "checked" : "") + '></div>';
+      }).join("")
+      : '<div class="channel-row"><span class="name" style="color:var(--muted)">No chat logs found yet.</span></div>';
+
+    list.querySelectorAll("input[type=checkbox]").forEach(function (box) {
+      box.addEventListener("change", function () {
+        var selected = known.filter(function (c) {
+          var input = list.querySelector('input[data-channel="' + CSS.escape(c.name) + '"]');
+          return input && input.checked;
+        }).map(function (c) { return c.name; });
+        sendClientMessage({ type: "setChannels", channels: selected });
+      });
+    });
+
+    var d = state.display;
+    document.getElementById("fontScale").value = Math.round((d.fontScale || 1) * 100);
+    document.getElementById("fontScaleLabel").textContent = Math.round((d.fontScale || 1) * 100) + "%";
+    document.getElementById("iconScale").value = Math.round((d.iconScale || 1) * 100);
+    document.getElementById("iconScaleLabel").textContent = Math.round((d.iconScale || 1) * 100) + "%";
+    document.getElementById("glow").checked = !!d.glowEnabled;
+    document.getElementById("dropShadow").checked = !!d.dropShadowEnabled;
+
+    var swatches = document.getElementById("colorSwatches");
+    swatches.innerHTML = COLOR_PRESETS.map(function (hex) {
+      var selected = hex.toLowerCase() === (d.textColor || "").toLowerCase();
+      return '<div class="swatch' + (selected ? " selected" : "") + '" style="background:' + hex + '" data-color="' + hex + '"></div>';
+    }).join("");
+    swatches.querySelectorAll(".swatch").forEach(function (el) {
+      el.addEventListener("click", function () { pushDisplay({ textColor: el.dataset.color }); });
+    });
+  }
+
+  function pushDisplay(partial) {
+    var settings = Object.assign({}, state.display, partial);
+    state.display = settings;
+    sendClientMessage({ type: "setDisplay", settings: settings });
+  }
+
+  document.getElementById("fontScale").addEventListener("input", function (e) {
+    document.getElementById("fontScaleLabel").textContent = e.target.value + "%";
+  });
+  document.getElementById("fontScale").addEventListener("change", function (e) {
+    pushDisplay({ fontScale: Number(e.target.value) / 100 });
+  });
+  document.getElementById("iconScale").addEventListener("input", function (e) {
+    document.getElementById("iconScaleLabel").textContent = e.target.value + "%";
+  });
+  document.getElementById("iconScale").addEventListener("change", function (e) {
+    pushDisplay({ iconScale: Number(e.target.value) / 100 });
+  });
+  document.getElementById("glow").addEventListener("change", function (e) { pushDisplay({ glowEnabled: e.target.checked }); });
+  document.getElementById("dropShadow").addEventListener("change", function (e) { pushDisplay({ dropShadowEnabled: e.target.checked }); });
+
+  // ---------------------------------------------------------------------
+  // Header + nav
+  // ---------------------------------------------------------------------
+  function renderHeader() {
+    var names = Object.keys(state.locations);
+    var sub = "&nbsp;";
+    if (names.length) {
+      var first = state.locations[names[0]];
+      sub = escapeHtml(first.systemName) + (names.length > 1 ? " &middot; " + names.length + " known" : "");
+    }
+    document.getElementById("subtitle").innerHTML = sub;
+  }
+
+  function renderActive() {
+    if (activeView === "feed") renderFeed();
+    else if (activeView === "map") { mapView.resize(); mapView.draw(); }
+    else if (activeView === "settings") renderSettings();
+    renderHeader();
+  }
+
+  document.querySelectorAll("#nav button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      activeView = btn.dataset.view;
+      document.querySelectorAll("#nav button").forEach(function (b) { b.classList.toggle("active", b === btn); });
+      document.querySelectorAll(".view").forEach(function (v) { v.classList.toggle("active", v.id === "view-" + activeView); });
+      renderActive();
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // WebSocket
+  // ---------------------------------------------------------------------
   function setStatus(connected, text) {
-    dotEl.className = "dot" + (connected ? " connected" : "");
-    statusEl.textContent = text;
+    document.getElementById("dot").className = "dot" + (connected ? " connected" : "");
+    document.getElementById("status").textContent = text;
   }
 
   function connect() {
@@ -200,10 +650,14 @@
     var ws = new WebSocket(proto + "//" + location.host + "/intel");
     var backoff = 1000;
 
+    sendClientMessage = function (msg) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    };
+
     ws.onopen = function () {
       backoff = 1000;
       setStatus(true, "live");
-      try { ws.send(JSON.stringify({ type: "hello", deviceName: "web:" + (navigator.userAgent || "browser"), protocolVersion: 1 })); } catch (e) {}
+      sendClientMessage({ type: "hello", deviceName: "web:" + (navigator.userAgent || "browser"), protocolVersion: 1 });
     };
 
     ws.onmessage = function (event) {
@@ -211,18 +665,47 @@
       try { data = JSON.parse(event.data); } catch (e) { return; }
       switch (data.type) {
         case "snapshot":
-          messages = (data.messages || []).slice().reverse();
-          if (messages.length > HISTORY_CAP) messages.length = HISTORY_CAP;
-          render();
+          state.messages = (data.messages || []).slice().reverse();
+          if (state.messages.length > HISTORY_CAP) state.messages.length = HISTORY_CAP;
+          state.locations = {};
+          (data.locations || []).forEach(function (loc) { state.locations[loc.characterName] = loc; });
+          state.channels = data.channels || state.channels;
+          state.display = data.display || state.display;
+          state.scopeRegionIds = data.scopeRegionIds || [];
+          renderActive();
           break;
         case "intel":
           addMessage(data.message);
+          break;
+        case "location":
+          state.locations[data.location.characterName] = data.location;
+          if (activeView === "map") mapView.draw();
+          renderHeader();
+          break;
+        case "characters":
+          (data.characters || []).forEach(function (c) { state.characters[c.name] = c; });
+          break;
+        case "sovereignty":
+          state.sovereignty = { holders: data.holders || [], systems: data.systems || {} };
+          if (activeView === "map") mapView.draw();
+          break;
+        case "stats":
+          (data.systems || []).forEach(function (s) { state.stats[s.systemId] = s; });
+          break;
+        case "channels":
+          state.channels = data;
+          if (activeView === "settings") renderSettings();
+          break;
+        case "display":
+          state.display = data.settings;
+          if (activeView === "feed") renderFeed();
+          if (activeView === "settings") renderSettings();
           break;
         case "heartbeat":
           setStatus(true, "live");
           break;
         default:
-          break; // location/channels/characters/sovereignty/stats/display: not used by this minimal client.
+          break;
       }
     };
 
@@ -234,6 +717,8 @@
     ws.onerror = function () { ws.close(); };
   }
 
+  mapView.resize();
+  loadUniverse();
   connect();
 })();
 </script>
