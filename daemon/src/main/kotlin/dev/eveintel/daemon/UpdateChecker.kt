@@ -32,7 +32,7 @@ object UpdateChecker {
 
     /** Bumped by hand alongside `android/build.gradle.kts` and `site/src/lib/release.ts` on every
      *  release -- there is no single source of truth for the daemon's own version yet. */
-    const val CURRENT_VERSION = "0.1.2"
+    const val CURRENT_VERSION = "0.2.0"
 
     private const val ENDPOINT = "https://intel.evedeck.space/api/version"
 

@@ -5,8 +5,8 @@
  * them is worse than one that updates none -- a download page disagreeing with itself is the kind
  * of thing that makes people assume the binary is wrong too.
  */
-export const RELEASE_TAG = "intel-v0.1.2";
-export const VERSION = "0.1.2";
+export const RELEASE_TAG = "intel-v0.2.0";
+export const VERSION = "0.2.0";
 
 /**
  * Bullets for this version, read by /api/version so the daemon and the tablet app can show what
@@ -14,11 +14,9 @@ export const VERSION = "0.1.2";
  * came from.
  */
 export const CHANGELOG: string[] = [
-  "Added font size, icon size, text colour, glow and drop shadow controls to the feed, synced from the daemon to every connected tablet.",
-  "Added a live EVE-time clock to the tablet header, with a downtime indicator during the daily maintenance window.",
-  "Fixed several parser gaps: plural ship names, Chinese-client hull names, stylised pilot handles, and a pilot being listed twice when linked with their current ship.",
-  "Added system inference for terse follow-up reports with no system of their own.",
-  "Published measured RAM and CPU footprint numbers on the download page."
+  "Added a LAN web feed for anything that isn't Android -- open the daemon's own address in Safari or any browser and it mirrors the tablet app: same Intel/Map/Settings layout, ship icons, portraits, jump-distance badges and region-scoped map, installable via 'Add to Home Screen' with no App Store and no account.",
+  "Region scope is now detected automatically per channel, straight from that channel's own MOTD, instead of one hand-typed list shared by every channel -- fixes abbreviations occasionally resolving to the wrong system or not at all when a channel's actual regions weren't in the old list.",
+  "Fixed the daemon's Settings window showing a stale channel selection after the tablet changed it."
 ];
 
 const BASE = `https://github.com/EveDeck/EveDeck-Intel/releases/download/${RELEASE_TAG}`;
@@ -46,7 +44,7 @@ export const DOWNLOADS: Download[] = [
     file: `EveDeckIntel-daemon-${VERSION}-win-x64.zip`,
     href: `${BASE}/EveDeckIntel-daemon-${VERSION}-win-x64.zip`,
     size: "40 MB",
-    sha256: "ca6ce6bd37f057c45f82fa21276871f35ffb591701858ff327d8a9e97f3ff091",
+    sha256: "77ba7d5eed9bc0b8e91127f1454c4b6592197711cd44d1f6bfb5e561df3736c3",
     requirement: "Windows 10 or 11, 64-bit — ~150 MB RAM, near-idle CPU while running",
     detail:
       "Reads the chat logs and serves them to the tablet. Unzip and run — Java is bundled, so nothing has to be installed first."
@@ -58,7 +56,7 @@ export const DOWNLOADS: Download[] = [
     file: `EveDeckIntel-${VERSION}.apk`,
     href: `${BASE}/EveDeckIntel-${VERSION}.apk`,
     size: "15 MB",
-    sha256: "8ab6c0cf8889ab5a82e29ac5c729573a62478b4df84b47cb1a6ed2760cd2fd69",
+    sha256: "58733666b49732c6bb61ebd1defd8c0e1c4e4bb71d795bc49c8dc8cf1b60c642",
     requirement: "Android 8.0 or newer, tablet — ~170 MB RAM",
     detail:
       "The feed, the map and the alerts. Sideloaded, so Android asks once whether to allow installs from your browser."
