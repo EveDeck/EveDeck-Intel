@@ -7,128 +7,156 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>EveDeck Intel</title>
 <style>
+  /* Colours lifted verbatim from android/ui/Theme.kt's IntelColors so this reads as the same app. */
   :root {
-    --bg: #0a0e14;
-    --surface: #131a24;
-    --surface-raised: #1b2432;
-    --text: #d7e1ec;
-    --muted: #7c8ba0;
-    --accent: #5fb3e8;
-    --clear: #4caf6e;
-    --warn: #e0a23c;
-    --hostile: #d9534f;
-    --divider: #232e3d;
+    --background: #0B0F14;
+    --surface: #131A22;
+    --surface-raised: #1B2530;
+    --chrome: #0B0F14;
+    --on-surface: #D7E1EC;
+    --muted: #7A8899;
+    --hostile: #FF5252;
+    --clear: #4CAF50;
+    --warning: #FFB300;
+    --accent: #4FC3F7;
+    --you: #B388FF;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; padding: 0; height: 100%; overflow: hidden;
-    background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--background); color: var(--on-surface);
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   #app { display: flex; flex-direction: column; height: 100%; }
+  .mono { font-family: ui-monospace, SFMono-Regular, "Roboto Mono", monospace; }
 
+  /* StatusBar */
   #header {
-    flex: 0 0 auto; z-index: 10;
-    display: flex; align-items: center; gap: 10px;
-    padding: calc(10px + env(safe-area-inset-top)) 14px 10px 14px;
-    background: var(--surface); border-bottom: 1px solid var(--divider);
+    flex: 0 0 auto; display: flex; align-items: center;
+    background: var(--chrome);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px 16px;
   }
-  #header .dot {
-    width: 9px; height: 9px; border-radius: 50%;
-    background: var(--hostile); flex-shrink: 0;
-    transition: background 0.2s;
-  }
+  #header .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--hostile); flex-shrink: 0; }
   #header .dot.connected { background: var(--clear); }
-  #header .titles { display: flex; flex-direction: column; line-height: 1.25; }
-  #header .title { font-weight: 600; letter-spacing: 0.04em; font-size: 15px; }
-  #header .subtitle { color: var(--muted); font-size: 11px; }
-  #header .status { margin-left: auto; color: var(--muted); font-size: 12px; }
+  #header .dot.connecting { background: var(--warning); }
+  #header .title { margin-left: 10px; font-weight: 700; font-size: 15px; }
+  #header .clock { margin-left: auto; font-size: 12px; color: var(--muted); }
+  #header .clock.downtime { color: var(--warning); font-weight: 700; }
+  #header .locbox {
+    margin-left: 14px; text-align: right; border-radius: 6px; padding: 4px 8px; cursor: pointer;
+  }
+  #header .locbox .system { color: var(--you); font-weight: 700; font-size: 15px; }
+  #header .locbox .sub { color: var(--muted); font-size: 11px; }
+  #header .locbox .warn { color: var(--warning); font-weight: 700; font-size: 13px; }
 
   #views { flex: 1 1 auto; min-height: 0; position: relative; }
   .view { position: absolute; inset: 0; overflow: auto; display: none; -webkit-overflow-scrolling: touch; }
   .view.active { display: block; }
 
-  #view-feed { padding: 8px 10px 24px 10px; }
-  #empty { padding: 40px 20px; text-align: center; color: var(--muted); }
+  /* Feed */
+  #view-feed { padding: 4px 8px 24px 8px; }
+  #empty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 18px; }
 
-  .row {
-    background: var(--surface); border: 1px solid var(--divider); border-radius: 8px;
-    padding: 10px 12px; margin-bottom: 8px;
+  .row { display: flex; align-items: flex-start; border-radius: 5px; padding: 8px 10px; margin: 1.5px 0; background: var(--surface); }
+  .row.inrange { background: var(--surface-raised); border: 1px solid; }
+
+  .jumpbadge {
+    flex: 0 0 auto; width: 48px; height: 40px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; margin-right: 10px;
   }
-  .row .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .row .system { font-size: 17px; font-weight: 700; color: var(--accent); font-family: ui-monospace, SFMono-Regular, monospace; }
-  .row .system.inferred { opacity: 0.55; font-style: italic; }
-  .row .age { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .jumpbadge .here { font-size: 13px; }
+  .jumpbadge .n { font-size: 17px; }
+
+  .row .main { flex: 1 1 auto; min-width: 0; }
+  .row .top { display: flex; align-items: center; flex-wrap: wrap; }
+  .row .system { font-weight: 700; font-size: 19px; }
+  .row .system.inferred { font-style: italic; }
   .chip {
-    display: inline-block; font-size: 11px; color: var(--muted);
-    background: var(--surface-raised); border-radius: 3px; padding: 2px 6px;
-    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 12px; color: var(--muted); background: var(--surface-raised);
+    border-radius: 3px; padding: 2px 6px; margin-left: 6px;
   }
-  .kw {
-    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 0.03em;
-    border-radius: 3px; padding: 2px 6px;
+  .chip.sov { color: var(--you); background: rgba(179,136,255,0.15); }
+  .row .spacer { flex: 1 1 auto; }
+  .row .channel { font-size: 12px; color: var(--muted); background: var(--surface-raised); border-radius: 3px; padding: 2px 6px; }
+  .row .age { margin-left: 8px; font-size: 14px; color: var(--muted); }
+
+  .pilerow { display: flex; align-items: center; flex-wrap: wrap; margin-top: 3px; }
+  .pillitem { display: flex; align-items: center; margin-right: 10px; margin-top: 2px; }
+  .pillitem img { border-radius: 3px; background: var(--surface-raised); object-fit: cover; margin-right: 5px; }
+  .pillitem img.portrait { border-radius: 50%; }
+  .pillitem .ticker { color: var(--accent); font-size: 13px; margin-left: 4px; }
+  .extras { font-weight: 700; font-size: 15px; margin-top: 4px; }
+  .rawline { color: var(--muted); font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Update banner */
+  .update-banner {
+    display: flex; align-items: center; margin: 6px 0; padding: 8px 12px; border-radius: 6px;
+    background: rgba(79,195,247,0.16); border: 1px solid rgba(79,195,247,0.4);
   }
-  .kw.clear { color: var(--clear); background: rgba(76,175,110,0.12); }
-  .kw.hostile { color: var(--hostile); background: rgba(217,83,79,0.12); }
-  .kw.neutral { color: var(--warn); background: rgba(224,162,60,0.12); }
-  .jump {
-    font-size: 11px; font-weight: 700; border-radius: 3px; padding: 2px 7px;
-    font-family: ui-monospace, SFMono-Regular, monospace;
-  }
-  .jump.here { color: #fff; background: var(--hostile); }
-  .jump.near { color: var(--hostile); background: rgba(217,83,79,0.15); }
-  .jump.mid { color: var(--warn); background: rgba(224,162,60,0.15); }
-  .jump.far { color: var(--muted); background: var(--surface-raised); }
-  .row .body { margin-top: 8px; font-size: 14px; color: var(--text); display: flex; gap: 10px; flex-wrap: wrap; }
-  .pill { display: flex; align-items: center; gap: 5px; }
-  .pill img { width: 22px; height: 22px; border-radius: 4px; background: var(--surface-raised); object-fit: cover; }
-  .pill .count { color: var(--warn); font-weight: 600; }
-  .pill.player { color: var(--muted); }
+  .update-banner .info { flex: 1 1 auto; }
+  .update-banner .title { color: var(--accent); font-weight: 700; font-size: 14px; }
+  .update-banner .note { color: var(--muted); font-size: 12px; }
+  .update-banner button { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 13px; padding: 4px 10px; cursor: pointer; }
+  .update-banner .dismiss { color: var(--muted); font-size: 18px; }
 
   /* Map */
   #view-map { padding: 0; touch-action: none; }
-  #map-canvas { display: block; width: 100%; height: 100%; background: var(--bg); }
-  #map-hint {
-    position: absolute; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
-    color: var(--muted); font-size: 11px; background: rgba(19,26,36,0.8);
-    padding: 4px 8px; border-radius: 4px; pointer-events: none;
-  }
+  #map-canvas { display: block; width: 100%; height: 100%; background: var(--background); }
+  #map-caption { position: absolute; left: 12px; top: 12px; color: var(--muted); font-size: 14px; pointer-events: none; }
+  #map-hint { position: absolute; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); color: rgba(122,136,153,0.6); font-size: 12px; pointer-events: none; }
+  #map-empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; color: var(--muted); font-size: 17px; text-align: center; white-space: pre-line; padding: 20px; }
 
   /* Settings */
-  #view-settings { padding: 14px; }
-  .section { margin-bottom: 22px; }
-  .section h2 {
-    font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--muted); margin: 0 0 10px 0; font-weight: 600;
-  }
-  .channel-row, .toggle-row {
+  #view-settings { padding: 16px; }
+  .section { margin-bottom: 20px; }
+  .section h2 { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; margin: 0 0 10px 0; }
+  .section .desc { color: var(--muted); font-size: 14px; margin-bottom: 10px; }
+  .channel-row, .char-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 9px 4px; border-bottom: 1px solid var(--divider); font-size: 14px;
+    border-radius: 4px; padding: 8px 12px; margin-bottom: 6px; background: var(--surface);
   }
-  .channel-row:last-child, .toggle-row:last-child { border-bottom: none; }
-  .channel-row .name { font-family: ui-monospace, SFMono-Regular, monospace; }
-  .slider-row { padding: 8px 4px; }
-  .slider-row label { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input[type="range"] { width: 100%; }
-  input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
-  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
-  .swatch {
-    width: 28px; height: 28px; border-radius: 6px; border: 2px solid transparent; cursor: pointer;
+  .channel-row .name { font-family: ui-monospace, monospace; }
+  .channel-row .name.selected { color: var(--accent); font-weight: 700; }
+  .channel-row .name.reserved { color: var(--muted); }
+  .channel-row .sub { color: var(--muted); font-size: 13px; }
+  .char-row.selected { background: rgba(79,195,247,0.15); }
+  .char-row .name.selected { color: var(--accent); font-weight: 700; }
+  .char-row .right { display: flex; gap: 8px; align-items: baseline; }
+  .char-row .sys { font-family: ui-monospace, monospace; color: var(--muted); }
+  .char-row .since { font-size: 13px; color: var(--muted); }
+  .warn-text { color: var(--warning); font-size: 15px; }
+  .switch { position: relative; width: 40px; height: 24px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; background: var(--surface-raised); border-radius: 24px; transition: 0.15s;
   }
+  .switch .track::before {
+    content: ""; position: absolute; width: 18px; height: 18px; left: 3px; top: 3px;
+    background: var(--muted); border-radius: 50%; transition: 0.15s;
+  }
+  .switch input:checked + .track { background: rgba(79,195,247,0.4); }
+  .switch input:checked + .track::before { background: var(--accent); transform: translateX(16px); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
   .swatch.selected { border-color: var(--accent); }
+  .swatches { display: flex; gap: 12px; }
+
+  /* Character picker dialog */
+  #char-dialog-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  #char-dialog {
+    background: var(--chrome); border-radius: 8px; padding: 20px; width: min(360px, 90vw); max-height: 70vh; display: flex; flex-direction: column;
+  }
+  #char-dialog h3 { margin: 0 0 10px 0; }
+  #char-dialog-list { overflow: auto; }
+  #char-dialog .done { align-self: flex-end; margin-top: 12px; background: none; border: none; color: var(--accent); font-weight: 700; font-size: 15px; padding: 6px 10px; cursor: pointer; }
 
   /* Nav */
-  #nav {
-    flex: 0 0 auto; display: flex; background: var(--surface);
-    border-top: 1px solid var(--divider);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  #nav button {
-    flex: 1; background: none; border: none; color: var(--muted);
-    padding: 10px 0 8px 0; font-size: 11px; font-family: inherit;
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-  }
+  #nav { flex: 0 0 auto; display: flex; background: var(--chrome); padding-bottom: env(safe-area-inset-bottom); }
+  #nav button { flex: 1; background: none; border: none; color: var(--muted); padding: 10px 0 8px 0; font-size: 11px; font-family: inherit; display: flex; flex-direction: column; align-items: center; gap: 3px; }
   #nav button.active { color: var(--accent); }
   #nav button svg { width: 22px; height: 22px; fill: currentColor; }
 </style>
@@ -137,45 +165,61 @@
 <div id="app">
   <div id="header">
     <div class="dot" id="dot"></div>
-    <div class="titles">
-      <div class="title" id="title">INTEL</div>
-      <div class="subtitle" id="subtitle">&nbsp;</div>
-    </div>
-    <div class="status" id="status">connecting&hellip;</div>
+    <div class="title">INTEL</div>
+    <div class="clock" id="clock"></div>
+    <div class="locbox" id="locbox"></div>
   </div>
 
   <div id="views">
     <div class="view active" id="view-feed">
+      <div id="update-banner-slot"></div>
       <div id="feed"></div>
-      <div id="empty" style="display:none">Waiting for intel&hellip;</div>
+      <div id="empty" style="display:none"></div>
     </div>
 
     <div class="view" id="view-map">
       <canvas id="map-canvas"></canvas>
-      <div id="map-hint">drag to pan &middot; pinch/scroll to zoom</div>
+      <div id="map-caption"></div>
+      <div id="map-hint">pinch to zoom &middot; drag to pan</div>
+      <div id="map-empty"></div>
     </div>
 
     <div class="view" id="view-settings">
       <div class="section">
         <h2>Intel channels</h2>
+        <div class="desc">Every channel the daemon can see logs for. Tick the ones carrying intel. Local is always read, for your position.</div>
         <div id="channel-list"></div>
       </div>
       <div class="section">
+        <h2>Alert characters</h2>
+        <div class="desc">Jump distance is measured from whichever of these characters is closest, using the system their Local channel last reported.</div>
+        <div id="char-list"></div>
+      </div>
+      <div class="section">
+        <h2>Alerts</h2>
+        <div class="desc" id="radiusLabel"></div>
+        <input type="range" id="alertRadius" min="0" max="15" step="1">
+        <div class="desc" id="radiusNote"></div>
+        <div class="channel-row"><span>Also alert on 'clear' reports</span><label class="switch"><input type="checkbox" id="alertOnClear"><span class="track"></span></label></div>
+        <div class="channel-row"><span>Keep the screen on</span><label class="switch"><input type="checkbox" id="keepScreenOn"><span class="track"></span></label></div>
+      </div>
+      <div class="section">
         <h2>Feed appearance</h2>
-        <div class="slider-row">
-          <label><span>Font size</span><span id="fontScaleLabel">100%</span></label>
-          <input type="range" id="fontScale" min="75" max="175" step="5">
-        </div>
-        <div class="slider-row">
-          <label><span>Icon size</span><span id="iconScaleLabel">100%</span></label>
-          <input type="range" id="iconScale" min="75" max="175" step="5">
-        </div>
-        <div class="slider-row">
-          <label><span>Text colour</span></label>
-          <div class="swatches" id="colorSwatches"></div>
-        </div>
-        <div class="toggle-row"><span>Glow</span><input type="checkbox" id="glow"></div>
-        <div class="toggle-row"><span>Drop shadow</span><input type="checkbox" id="dropShadow"></div>
+        <div class="desc" style="font-size:12px">Applies to every connected tablet — set from either the tablet or the PC's settings window.</div>
+        <div class="desc" id="fontScaleLabel"></div>
+        <input type="range" id="fontScale" min="0.75" max="1.75" step="0.01">
+        <div class="desc" id="iconScaleLabel" style="margin-top:10px"></div>
+        <input type="range" id="iconScale" min="0.75" max="1.75" step="0.01">
+        <div class="desc" style="margin-top:10px">Text colour</div>
+        <div class="swatches" id="colorSwatches"></div>
+        <div class="desc" style="font-size:12px">Doesn't affect the hostile/clear/warning status colours — those stay fixed, they carry meaning.</div>
+        <div class="desc" style="margin-top:6px">Text effect</div>
+        <div class="channel-row"><span>Glow</span><label class="switch"><input type="checkbox" id="glow"><span class="track"></span></label></div>
+        <div class="channel-row"><span>Drop shadow</span><label class="switch"><input type="checkbox" id="dropShadow"><span class="track"></span></label></div>
+      </div>
+      <div class="section">
+        <h2>About</h2>
+        <div class="desc">Reads your alliance intel channels from the EVE client's chat logs on the PC and mirrors them here. LAN only — no account, no TLS, nothing leaves your network.</div>
       </div>
     </div>
   </div>
@@ -196,61 +240,147 @@
   </div>
 </div>
 
+<div id="char-dialog-backdrop">
+  <div id="char-dialog">
+    <h3>Alert characters</h3>
+    <div class="desc">Jump distance is measured from whichever of these is closest.</div>
+    <div id="char-dialog-list"></div>
+    <button class="done" id="char-dialog-done">Done</button>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
 
-  // ---------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------
+  // =====================================================================
+  // Local (per-device) settings -- mirrors android/Settings.kt, stored in
+  // SharedPreferences there and localStorage here. Never sent to the daemon.
+  // =====================================================================
+  var LocalSettings = (function () {
+    var KEY = "eveintel.settings";
+    var defaults = { alertCharacters: [], alertJumpRadius: 5, alertOnClear: false, keepScreenOn: true };
+    var value = load();
+    function load() {
+      try {
+        var raw = JSON.parse(localStorage.getItem(KEY) || "{}");
+        return Object.assign({}, defaults, raw);
+      } catch (e) { return Object.assign({}, defaults); }
+    }
+    function save() { try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (e) {} }
+    return {
+      get: function () { return value; },
+      update: function (partial) { value = Object.assign({}, value, partial); save(); onLocalSettingsChanged(); },
+      toggleCharacter: function (name) {
+        var set = value.alertCharacters.slice();
+        var i = set.indexOf(name);
+        if (i >= 0) set.splice(i, 1); else set.push(name);
+        this.update({ alertCharacters: set });
+      },
+    };
+  })();
+
+  // =====================================================================
+  // Daemon state
+  // =====================================================================
   var state = {
-    messages: [],       // newest first
-    locations: {},      // characterName -> {characterId?, systemId, systemName, sinceMillis}
-    characters: {},     // name -> CharacterInfo
+    connection: "disconnected", // disconnected | connecting | connected
+    messages: [],
+    locations: {},
+    characters: {},
     channels: { available: [], selected: [] },
     display: { fontScale: 1, iconScale: 1, textColor: "#D7E1EC", glowEnabled: false, dropShadowEnabled: false },
     sovereignty: { holders: [], systems: {} },
-    stats: {},           // systemId -> SystemStats
+    stats: {},
     scopeRegionIds: [],
+    availableUpdate: null,
   };
   var universe = { loaded: false, systemsById: {}, regionNames: {}, adjacency: {} };
+  var distances = {};
   var HISTORY_CAP = 300;
   var activeView = "feed";
+  var wakeLock = null;
 
-  // ---------------------------------------------------------------------
+  // =====================================================================
+  // Derived state -- mirrors IntelUiState's computed properties exactly.
+  // =====================================================================
+  function alertLocations() {
+    return LocalSettings.get().alertCharacters.map(function (n) { return state.locations[n]; }).filter(Boolean);
+  }
+  function alertSystemIds() {
+    var s = {}; alertLocations().forEach(function (l) { s[l.systemId] = true; }); return s;
+  }
+  function primaryLocation() {
+    var locs = alertLocations().slice().sort(function (a, b) { return a.characterName < b.characterName ? -1 : 1; });
+    return locs[0] || null;
+  }
+  function jumpRange() { return LocalSettings.get().alertJumpRadius || 0; }
+  function isInRange(jumps) { return jumps != null && jumpRange() > 0 && jumps <= jumpRange(); }
+  function nearestJumps(message) {
+    var ids = tokensOfType(message, "system").map(function (t) { return t.systemId; });
+    var best = null;
+    ids.forEach(function (id) { var d = distances[id]; if (d != null && (best == null || d < best)) best = d; });
+    return best;
+  }
+  function recomputeDistances() {
+    var origins = alertLocations().map(function (l) { return l.systemId; });
+    distances = universe.loaded && origins.length ? bfs(origins) : {};
+  }
+
+  // =====================================================================
   // Small helpers
-  // ---------------------------------------------------------------------
+  // =====================================================================
   function escapeHtml(text) {
     var div = document.createElement("div");
     div.textContent = text == null ? "" : String(text);
     return div.innerHTML;
   }
-  function tokensOfType(message, type) {
-    return message.tokens.filter(function (t) { return t.type === type; });
-  }
+  function tokensOfType(message, type) { return message.tokens.filter(function (t) { return t.type === type; }); }
   function age(millis) {
     var s = Math.max(0, Math.floor((Date.now() - millis) / 1000));
     if (s < 60) return s + "s";
-    var m = Math.floor(s / 60);
-    if (m < 60) return m + "m";
-    return Math.floor(m / 60) + "h";
+    if (s < 3600) return Math.floor(s / 60) + "m";
+    return Math.floor(s / 3600) + "h";
   }
-  function imgUrl(category, id, variant, size) {
-    return "/img/" + category + "/" + id + "/" + variant + "?size=" + (size || 64);
+  function imgUrl(category, id, variant, size) { return "/img/" + category + "/" + id + "/" + variant + "?size=" + (size || 64); }
+  function parsedTextColor() { return /^#[0-9A-Fa-f]{6}$/.test(state.display.textColor || "") ? state.display.textColor : "#D7E1EC"; }
+  function hexToRgb(hex) {
+    var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || "");
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [215, 225, 236];
   }
+  /**
+   * Mirrors ShadowedText: glow (own colour, blurred) and/or drop shadow (black, offset), CSS can
+   * layer both natively in one text-shadow. Returns a bare "text-shadow:...;" declaration (never a
+   * `style="..."` attribute) since every call site already has its own style attribute open for
+   * `color:` -- a second `style=` attribute on the same element is invalid HTML and the browser
+   * silently drops it, which is exactly the bug this shape avoids.
+   */
+  function shadowDeclaration(colorHex) {
+    var shadows = [];
+    if (state.display.glowEnabled) shadows.push("0 0 18px " + rgba(colorHex, 0.85));
+    if (state.display.dropShadowEnabled) shadows.push("2px 2px 4px rgba(0,0,0,0.75)");
+    return shadows.length ? "text-shadow:" + shadows.join(",") + ";" : "";
+  }
+  var HEX = { clear: "#4CAF50", hostile: "#FF5252", warning: "#FFB300", accent: "#4FC3F7", muted: "#7A8899", you: "#B388FF" };
 
-  // ---------------------------------------------------------------------
-  // Universe (systems/regions/stargates), fetched once for jump distance
-  // and the map -- same static data the Android app bundles.
-  // ---------------------------------------------------------------------
+  /** IntelColors.forJumps -- closer is louder. Returns a hex string, not a CSS var, so alpha/shadow math works. */
+  function colorForJumps(jumps) {
+    if (jumps == null) return HEX.muted;
+    if (jumps === 0) return HEX.hostile;
+    if (jumps <= 2) return HEX.warning;
+    if (jumps <= 5) return HEX.accent;
+    return HEX.muted;
+  }
+  function rgba(hex, alpha) { var c = hexToRgb(hex); return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + alpha + ")"; }
+
+  // =====================================================================
+  // Universe + jump distance (BFS mirrors Universe.distancesFrom)
+  // =====================================================================
   function loadUniverse() {
     fetch("/universe.json").then(function (r) { return r.json(); }).then(function (dto) {
       dto.regions.forEach(function (r) { universe.regionNames[r.i] = r.n; });
       dto.systems.forEach(function (s) {
-        universe.systemsById[s.i] = {
-          id: s.i, name: s.n, regionId: s.r, regionName: universe.regionNames[s.r] || "Unknown",
-          security: s.s, x: s.x, y: s.y, z: s.z,
-        };
+        universe.systemsById[s.i] = { id: s.i, name: s.n, regionId: s.r, regionName: universe.regionNames[s.r] || "Unknown", security: s.s, x: s.x, y: s.y, z: s.z };
       });
       dto.jumps.forEach(function (pair) {
         var a = pair[0], b = pair[1];
@@ -258,13 +388,11 @@
         (universe.adjacency[b] = universe.adjacency[b] || []).push(a);
       });
       universe.loaded = true;
-      mapView.fit();
+      recomputeDistances();
       renderActive();
-    }).catch(function () { /* map/jumps just stay unavailable */ });
+    }).catch(function () {});
   }
-
-  /** Jump distance from the nearest of several origins -- mirrors Universe.distancesFrom(origins). */
-  function distancesFrom(origins) {
+  function bfs(origins) {
     var dist = {};
     var frontier = origins.filter(function (id) { return universe.systemsById[id]; });
     frontier.forEach(function (id) { dist[id] = 0; });
@@ -272,99 +400,131 @@
     while (frontier.length) {
       depth++;
       var next = [];
-      for (var i = 0; i < frontier.length; i++) {
-        var neighbours = universe.adjacency[frontier[i]] || [];
-        for (var j = 0; j < neighbours.length; j++) {
-          var nb = neighbours[j];
+      frontier.forEach(function (node) {
+        (universe.adjacency[node] || []).forEach(function (nb) {
           if (!(nb in dist)) { dist[nb] = depth; next.push(nb); }
-        }
-      }
+        });
+      });
       frontier = next;
     }
     return dist;
   }
 
-  function knownOrigins() {
-    return Object.keys(state.locations).map(function (name) { return state.locations[name].systemId; });
-  }
-
-  // ---------------------------------------------------------------------
-  // Feed
-  // ---------------------------------------------------------------------
-  function keywordClass(kw) {
-    if (kw === "CLEAR") return "clear";
-    if (kw === "SPIKE" || kw === "GATE_CAMP" || kw === "BUBBLES" || kw === "CYNO" || kw === "HOSTILE" || kw === "COMBAT_PROBES") return "hostile";
-    return "neutral";
-  }
-  var KEYWORD_LABEL = {
-    CLEAR: "CLEAR", STATUS: "STATUS", NO_VISUAL: "NV", SPIKE: "SPIKE", GATE_CAMP: "CAMP",
-    BUBBLES: "BUBBLES", WORMHOLE: "WH", CYNO: "CYNO", ESS: "ESS", SKYHOOK: "SKYHOOK",
-    COMBAT_PROBES: "PROBES", DOCKED: "DOCKED", D_SCAN: "D-SCAN", NEUTRAL: "NEUT", HOSTILE: "HOSTILE",
+  // =====================================================================
+  // Feed -- mirrors FeedScreen.kt's IntelRow exactly: accent colour is
+  // Clear-green when the line says CLEAR, else the jump-distance colour;
+  // ship/pilot text uses the user's chosen text colour, not the accent.
+  // =====================================================================
+  var KEYWORD_LABEL = { // Keyword.label() -- deliberately mixed case, matches the app
+    CLEAR: "CLEAR", STATUS: "status", NO_VISUAL: "no visual", SPIKE: "SPIKE", GATE_CAMP: "GATECAMP",
+    BUBBLES: "bubbles", WORMHOLE: "wormhole", CYNO: "CYNO", ESS: "ess", SKYHOOK: "skyhook",
+    COMBAT_PROBES: "probes", DOCKED: "docked", D_SCAN: "dscan", NEUTRAL: "NEUT", HOSTILE: "HOSTILE",
   };
-  var QUESTION_LABEL = { LOCATION: "LOC?", SHIP_TYPE: "SHIP?", STATUS: "STATUS?", COUNT: "COUNT?" };
-
-  function jumpBadge(systemId) {
-    var origins = knownOrigins();
-    if (!universe.loaded || !origins.length || systemId == null) return "";
-    var dist = distancesFrom(origins)[systemId];
-    if (dist == null) return '<span class="jump far">&mdash;</span>';
-    if (dist === 0) return '<span class="jump here">HERE</span>';
-    var cls = dist <= 2 ? "near" : dist <= 5 ? "mid" : "far";
-    return '<span class="jump ' + cls + '">' + dist + 'j</span>';
+  function extraLabels(message) {
+    var parts = [];
+    tokensOfType(message, "keyword").forEach(function (k) { parts.push(KEYWORD_LABEL[k.keyword] || k.keyword); });
+    tokensOfType(message, "question").forEach(function (q) { parts.push(q.kind.toLowerCase().replace(/_/g, " ") + "?"); });
+    if (!tokensOfType(message, "ship").length) {
+      tokensOfType(message, "count").forEach(function (c) { parts.push(String(c.value)); });
+    }
+    return parts;
   }
 
   function renderRow(message) {
-    var systemToken = tokensOfType(message, "system")[0];
-    var keywords = tokensOfType(message, "keyword");
-    var ships = tokensOfType(message, "ship");
-    var players = tokensOfType(message, "player");
-    var questions = tokensOfType(message, "question");
-    var counts = tokensOfType(message, "count");
-    var iconSize = Math.round(22 * (state.display.iconScale || 1));
+    var system = tokensOfType(message, "system")[0];
+    var jumps = nearestJumps(message);
+    var inRange = isInRange(jumps);
+    var isClear = tokensOfType(message, "keyword").some(function (k) { return k.keyword === "CLEAR"; });
+    var accent = isClear ? HEX.clear : colorForJumps(jumps);
+    var iconSize = Math.round(26 * (state.display.iconScale || 1));
+    var portraitSize = Math.round(24 * (state.display.iconScale || 1));
+    var textColor = parsedTextColor();
+    var inferred = !!(system && system.inferred);
+
+    var row = document.createElement("div");
+    row.className = "row" + (inRange ? " inrange" : "");
+    if (inRange) row.style.borderColor = rgba(accent, 0.55);
+
+    var badgeHtml = '<div class="jumpbadge" style="color:' + accent + ';background:' + rgba(accent, inRange ? 0.28 : 0.13) + '">' +
+      (jumps == null ? '<span class="n">&mdash;</span>' : jumps === 0 ? '<span class="here">HERE</span>' : '<span class="n">' + jumps + 'j</span>') +
+      '</div>';
 
     var top = '<div class="top">';
-    if (systemToken) {
-      top += '<span class="system' + (systemToken.inferred ? ' inferred' : '') + '">' + escapeHtml(systemToken.name) + '</span>';
-      var region = universe.systemsById[systemToken.systemId] && universe.systemsById[systemToken.systemId].regionName;
+    var sysText = (inferred ? "~" : "") + (system ? system.name : "—");
+    top += '<span class="system mono' + (inferred ? " inferred" : "") + '" style="color:' + (inferred ? rgba(accent, 0.7) : accent) + ';' + shadowDeclaration(accent) + '">' + escapeHtml(sysText) + '</span>';
+    if (system) {
+      var region = universe.systemsById[system.systemId] && universe.systemsById[system.systemId].regionName;
       if (region) top += '<span class="chip">' + escapeHtml(region) + '</span>';
+      var holderId = state.sovereignty.systems[system.systemId];
+      if (holderId) {
+        var holder = state.sovereignty.holders.filter(function (h) { return String(h.id) === String(holderId); })[0];
+        if (holder) top += '<span class="chip sov">' + escapeHtml(holder.ticker || holder.name) + '</span>';
+      }
     }
-    keywords.forEach(function (k) {
-      top += '<span class="kw ' + keywordClass(k.keyword) + '">' + (KEYWORD_LABEL[k.keyword] || k.keyword) + '</span>';
-    });
-    questions.forEach(function (q) {
-      top += '<span class="kw neutral">' + (QUESTION_LABEL[q.kind] || q.kind) + '</span>';
-    });
-    top += '<span class="chip">' + escapeHtml(message.channel) + '</span>';
-    if (systemToken) top += jumpBadge(systemToken.systemId);
+    top += '<span class="spacer"></span>';
+    top += '<span class="channel mono">' + escapeHtml(message.channel) + '</span>';
     top += '<span class="age" data-ts="' + message.timestampMillis + '">' + age(message.timestampMillis) + '</span>';
     top += '</div>';
 
-    var body = [];
-    ships.forEach(function (s) {
-      var icon = s.typeId ? '<img loading="lazy" onerror="this.remove()" src="' + imgUrl("types", s.typeId, "icon", iconSize <= 32 ? 32 : 64) + '" width="' + iconSize + '" height="' + iconSize + '">' : "";
-      body.push('<span class="pill">' + icon + '<span>' + escapeHtml(s.name) + (s.count ? ' <span class="count">x' + s.count + '</span>' : '') + '</span></span>');
-    });
-    players.forEach(function (p) {
-      var name = p.text.replace(/\*$/, "");
-      var characterId = state.characters[name] && state.characters[name].characterId;
-      var icon = characterId ? '<img loading="lazy" onerror="this.remove()" src="' + imgUrl("characters", characterId, "portrait", iconSize <= 32 ? 32 : 64) + '" width="' + iconSize + '" height="' + iconSize + '">' : "";
-      body.push('<span class="pill player">' + icon + '<span>' + escapeHtml(name) + '</span></span>');
-    });
-    counts.forEach(function (c) {
-      var prefix = c.modifier === "PLUS" ? "+" : c.modifier === "TOTAL" ? "=" : "";
-      body.push('<span class="pill">' + prefix + c.value + '</span>');
-    });
+    var ships = tokensOfType(message, "ship");
+    var shipsHtml = "";
+    if (ships.length) {
+      shipsHtml = '<div class="pilerow">' + ships.slice(0, 6).map(function (s) {
+        var icon = s.typeId ? '<img class="mono" loading="lazy" onerror="this.remove()" width="' + iconSize + '" height="' + iconSize + '" src="' + imgUrl("types", s.typeId, "icon", 64) + '">' : "";
+        return '<span class="pillitem">' + icon + '<span style="color:' + textColor + ';font-weight:' + (s.count ? 700 : 400) + ';' + shadowDeclaration(textColor) + '">' +
+          (s.count ? s.count + '× ' : '') + escapeHtml(s.name) + '</span></span>';
+      }).join("") + '</div>';
+    }
 
-    var row = document.createElement("div");
-    row.className = "row";
-    row.innerHTML = top + (body.length ? '<div class="body">' + body.join("") + '</div>' : "");
+    var players = tokensOfType(message, "player");
+    var playersHtml = "";
+    if (players.length) {
+      playersHtml = '<div class="pilerow">' + players.slice(0, 6).map(function (p) {
+        var name = p.text.replace(/\*$/, "");
+        var info = state.characters[name];
+        var characterId = info && info.characterId;
+        var icon = characterId ? '<img class="portrait" loading="lazy" onerror="this.remove()" width="' + portraitSize + '" height="' + portraitSize + '" src="' + imgUrl("characters", characterId, "portrait", 64) + '">' : "";
+        var ticker = info && info.allianceTicker ? '<span class="ticker mono">[' + escapeHtml(info.allianceTicker) + ']</span>' : "";
+        return '<span class="pillitem">' + icon + '<span style="color:' + textColor + ';' + shadowDeclaration(textColor) + '">' + escapeHtml(name) + '</span>' + ticker + '</span>';
+      }).join("") + (players.length > 6 ? '<span class="pillitem" style="color:var(--muted)">+' + (players.length - 6) + '</span>' : '') + '</div>';
+    }
+
+    var extras = extraLabels(message);
+    var extrasHtml = extras.length
+      ? '<div class="extras" style="color:' + (isClear ? "var(--clear)" : "var(--warning)") + ';' + shadowDeclaration(isClear ? HEX.clear : HEX.warning) + '">' + escapeHtml(extras.join(" · ")) + '</div>'
+      : "";
+
+    var rawHtml = '<div class="rawline">' + escapeHtml(message.author + ": " + message.raw) + '</div>';
+
+    row.innerHTML = badgeHtml + '<div class="main">' + top + shipsHtml + playersHtml + extrasHtml + rawHtml + '</div>';
     return row;
   }
 
+  function renderUpdateBanner() {
+    var slot = document.getElementById("update-banner-slot");
+    var u = state.availableUpdate;
+    if (!u) { slot.innerHTML = ""; return; }
+    slot.innerHTML = '<div class="update-banner">' +
+      '<div class="info"><div class="title">EveDeck Intel ' + escapeHtml(u.version) + ' is available</div>' +
+      (u.whatsNew && u.whatsNew[0] ? '<div class="note">' + escapeHtml(u.whatsNew[0]) + '</div>' : '') + '</div>' +
+      (u.apkUrl ? '<button onclick="window.open(\'' + u.apkUrl + '\',\'_blank\')">Download</button>' : '') +
+      '<button class="dismiss" id="dismiss-update">&times;</button></div>';
+    var dismissBtn = document.getElementById("dismiss-update");
+    if (dismissBtn) dismissBtn.addEventListener("click", function () { state.availableUpdate = null; renderUpdateBanner(); });
+  }
+
   function renderFeed() {
+    renderUpdateBanner();
     var feedEl = document.getElementById("feed");
     var emptyEl = document.getElementById("empty");
-    emptyEl.style.display = state.messages.length ? "none" : "block";
+    if (!state.messages.length) {
+      emptyEl.style.display = "flex";
+      emptyEl.style.alignItems = "center"; emptyEl.style.justifyContent = "center"; emptyEl.style.height = "60vh";
+      emptyEl.textContent = state.connection === "connected" ? "Waiting for intel…" :
+        state.connection === "connecting" ? "Connecting to the daemon…" : "Cannot reach the daemon";
+    } else {
+      emptyEl.style.display = "none";
+    }
     var nearTop = document.getElementById("view-feed").scrollTop < 40;
     feedEl.innerHTML = "";
     var frag = document.createDocumentFragment();
@@ -377,26 +537,49 @@
     if (state.messages.some(function (m) { return m.id === message.id; })) return;
     state.messages.unshift(message);
     if (state.messages.length > HISTORY_CAP) state.messages.length = HISTORY_CAP;
+    maybeAlert(message);
     if (activeView === "feed") renderFeed();
   }
 
+  // Best-effort in-page alert while this tab is open. Android's alert runs as a background
+  // service and can notify with the app closed; a web page cannot do that without push
+  // infrastructure this LAN-only daemon doesn't have, so this only fires while the tab is open.
+  var alertAudioCtx = null;
+  function maybeAlert(message) {
+    var settings = LocalSettings.get();
+    if (settings.alertJumpRadius <= 0) return;
+    var isClear = tokensOfType(message, "keyword").some(function (k) { return k.keyword === "CLEAR"; });
+    if (isClear && !settings.alertOnClear) return;
+    var jumps = nearestJumps(message);
+    if (!isInRange(jumps)) return;
+    try {
+      alertAudioCtx = alertAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      var osc = alertAudioCtx.createOscillator();
+      var gain = alertAudioCtx.createGain();
+      osc.frequency.value = isClear ? 660 : 440;
+      gain.gain.setValueAtTime(0.15, alertAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, alertAudioCtx.currentTime + 0.4);
+      osc.connect(gain).connect(alertAudioCtx.destination);
+      osc.start(); osc.stop(alertAudioCtx.currentTime + 0.4);
+    } catch (e) {}
+  }
+
   setInterval(function () {
-    document.querySelectorAll(".age[data-ts]").forEach(function (el) {
-      el.textContent = age(Number(el.dataset.ts));
-    });
+    document.querySelectorAll(".age[data-ts]").forEach(function (el) { el.textContent = age(Number(el.dataset.ts)); });
   }, 1000);
 
-  // ---------------------------------------------------------------------
-  // Map -- systems as dots, pan/zoom, sovereignty colour, recent intel glow.
-  // Deliberately simpler than the app's map (no jump-range rings): this is
-  // a glance view, not a replacement for it.
-  // ---------------------------------------------------------------------
+  // =====================================================================
+  // Map -- mirrors MapScreen.kt: region-scoped (not the whole universe),
+  // stargate edges, sovereignty tint, kill-activity glow, intel freshness,
+  // "you" and in-range rings, x/z projection with z flipped.
+  // =====================================================================
   var mapView = (function () {
     var canvas = document.getElementById("map-canvas");
     var ctx = canvas.getContext("2d");
-    var cam = { x: 0, y: 0, scale: 1 };
-    var dragging = null;
-    var pinch = null;
+    var cam = { scale: 1, offsetX: 0, offsetY: 0 };
+    var bounds = null, systems = [], edges = [];
+    var dragging = null, pinch = null;
+    var FRESH_MS = 10 * 60 * 1000;
 
     function resize() {
       var rect = canvas.parentElement.getBoundingClientRect();
@@ -407,91 +590,148 @@
     }
     window.addEventListener("resize", resize);
 
-    /** Centres and scales on every known system the first time universe data arrives. */
-    function fit() {
-      var ids = Object.keys(universe.systemsById);
-      if (!ids.length) return;
+    function currentRegionIds() {
+      var loc = primaryLocation();
+      var here = loc && universe.systemsById[loc.systemId] && universe.systemsById[loc.systemId].regionId;
+      if (here != null) return [here];
+      if (state.scopeRegionIds.length) return state.scopeRegionIds;
+      return [];
+    }
+
+    function rebuild() {
+      cam.scale = 1; cam.offsetX = 0; cam.offsetY = 0;
+      var regionIds = currentRegionIds();
+      var ids = {}; regionIds.forEach(function (r) { ids[r] = true; });
+      systems = Object.keys(universe.systemsById).map(function (k) { return universe.systemsById[k]; })
+        .filter(function (s) { return ids[s.regionId]; });
+      document.getElementById("map-caption").textContent = regionIds.map(function (r) { return universe.regionNames[r]; }).filter(Boolean).join(", ");
+      if (!systems.length) {
+        bounds = null;
+        document.getElementById("map-empty").style.display = "flex";
+        document.getElementById("map-empty").textContent = "No region selected.\nConnect and pick a character to follow.";
+        return;
+      }
+      document.getElementById("map-empty").style.display = "none";
       var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-      ids.forEach(function (id) {
-        var s = universe.systemsById[id];
+      var idSet = {};
+      systems.forEach(function (s) {
+        idSet[s.id] = true;
         if (s.x < minX) minX = s.x; if (s.x > maxX) maxX = s.x;
         if (s.z < minZ) minZ = s.z; if (s.z > maxZ) maxZ = s.z;
       });
-      cam.minX = minX; cam.maxX = maxX; cam.minZ = minZ; cam.maxZ = maxZ;
-      cam.x = 0.5; cam.y = 0.5; cam.scale = 1;
+      bounds = { minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ };
+      edges = [];
+      systems.forEach(function (s) {
+        (universe.adjacency[s.id] || []).forEach(function (nb) {
+          if (idSet[nb] && nb > s.id) edges.push([s.id, nb]);
+        });
+      });
     }
 
-    function project(s) {
-      var rect = canvas.getBoundingClientRect();
-      var spanX = (cam.maxX - cam.minX) || 1;
-      var spanZ = (cam.maxZ - cam.minZ) || 1;
-      var nx = (s.x - cam.minX) / spanX;
-      var nz = (s.z - cam.minZ) / spanZ;
-      var size = Math.min(rect.width, rect.height) * cam.scale;
-      return {
-        x: (nx - cam.x) * size + rect.width / 2,
-        y: (nz - cam.y) * size + rect.height / 2,
-      };
+    function project(s, w, h) {
+      var spanX = (bounds.maxX - bounds.minX) || 1;
+      var spanZ = (bounds.maxZ - bounds.minZ) || 1;
+      var span = Math.max(spanX, spanZ);
+      var padding = 0.08;
+      var usable = Math.min(w, h) * (1 - 2 * padding);
+      var x = ((s.x - bounds.minX) / span) * usable + w * padding;
+      var y = (1 - (s.z - bounds.minZ) / span) * usable + h * padding; // z grows north; flip to match the in-game map
+      return { x: x * cam.scale + cam.offsetX, y: y * cam.scale + cam.offsetY };
     }
 
     function sovColor(holderId) {
-      var hue = Number(BigInt(holderId) % 360n);
-      return "hsl(" + hue + ", 55%, 45%)";
+      var hue = (Number(BigInt(holderId) % 360n) + 200) % 360;
+      return "hsl(" + hue + ",55%,55%)";
+    }
+    function systemColor(intel, now) {
+      if (!intel) return "rgba(122,136,153,0.45)";
+      var age = now - intel.ts;
+      if (age > FRESH_MS) return "rgba(122,136,153,0.45)";
+      if (intel.clear) return "#4CAF50";
+      var freshness = 1 - age / FRESH_MS;
+      return "rgba(255,82,82," + (0.45 + 0.55 * freshness).toFixed(2) + ")";
     }
 
     function draw() {
-      if (activeView !== "map" || !universe.loaded) return;
+      if (activeView !== "map" || !universe.loaded || !bounds) return;
       var rect = canvas.getBoundingClientRect();
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
       ctx.clearRect(0, 0, rect.width, rect.height);
-
       var now = Date.now();
-      var recent = {}; // systemId -> "clear" | "hostile", most recent within 10 min
+
+      var positions = {}; systems.forEach(function (s) { positions[s.id] = project(s, rect.width, rect.height); });
+
+      ctx.strokeStyle = "#1B2530"; ctx.lineWidth = 1.5 * cam.scale;
+      edges.forEach(function (e) {
+        var a = positions[e[0]], b = positions[e[1]];
+        if (!a || !b) return;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+
+      var intelBySystem = {};
       state.messages.forEach(function (m) {
-        if (now - m.timestampMillis > 10 * 60 * 1000) return;
-        var sysTok = tokensOfType(m, "system")[0];
-        if (!sysTok) return;
-        if (recent[sysTok.systemId]) return; // messages are newest-first already
-        var kws = tokensOfType(m, "keyword").map(function (k) { return k.keyword; });
-        recent[sysTok.systemId] = kws.indexOf("CLEAR") >= 0 ? "clear" : "hostile";
+        var clear = tokensOfType(m, "keyword").some(function (k) { return k.keyword === "CLEAR"; });
+        tokensOfType(m, "system").forEach(function (t) {
+          var existing = intelBySystem[t.systemId];
+          if (!existing || existing.ts < m.timestampMillis) intelBySystem[t.systemId] = { ts: m.timestampMillis, clear: clear };
+        });
       });
+      var youIds = alertSystemIds();
 
-      var origins = {};
-      knownOrigins().forEach(function (id) { origins[id] = true; });
+      systems.forEach(function (s) {
+        var p = positions[s.id];
+        var intel = intelBySystem[s.id];
+        var isYou = !!youIds[s.id];
+        var jumps = distances[s.id];
+        var inRange = isInRange(jumps);
+        var radius = (isYou ? 7 : 4) * Math.max(0.7, Math.min(cam.scale, 2));
 
-      Object.keys(universe.systemsById).forEach(function (id) {
-        var s = universe.systemsById[id];
-        var p = project(s);
-        if (p.x < -20 || p.x > rect.width + 20 || p.y < -20 || p.y > rect.height + 20) return;
-
-        var holder = state.sovereignty.systems[id];
-        var color = holder ? sovColor(holder) : (s.security >= 0.45 ? "#3a4a5c" : "#2a3644");
-        var r = Math.max(1.4, 1.4 * cam.scale);
-
-        if (recent[id]) {
-          ctx.beginPath();
-          ctx.fillStyle = recent[id] === "clear" ? "rgba(76,175,110,0.5)" : "rgba(217,83,79,0.6)";
-          ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2);
-          ctx.fill();
+        var holderId = state.sovereignty.systems[s.id];
+        if (holderId) {
+          ctx.beginPath(); ctx.fillStyle = sovColor(holderId).replace(")", ",0.22)").replace("hsl(", "hsla(");
+          ctx.arc(p.x, p.y, radius * 2.6, 0, Math.PI * 2); ctx.fill();
         }
-        ctx.beginPath();
-        ctx.fillStyle = origins[id] ? "#5fb3e8" : color;
-        ctx.arc(p.x, p.y, origins[id] ? r * 2 : r, 0, Math.PI * 2);
-        ctx.fill();
 
-        if (cam.scale > 3.5 || origins[id] || recent[id]) {
-          ctx.fillStyle = "#7c8ba0";
-          ctx.font = "10px ui-monospace, monospace";
-          ctx.fillText(s.name, p.x + 5, p.y + 3);
+        var pvp = (state.stats[s.id] && state.stats[s.id].shipKills + state.stats[s.id].podKills) || 0;
+        if (pvp > 0) {
+          var intensity = Math.min(0.7, Math.max(0.15, pvp / 20));
+          ctx.beginPath(); ctx.fillStyle = "rgba(255,179,0," + intensity.toFixed(2) + ")";
+          ctx.arc(p.x, p.y, radius * (2.2 + intensity * 2), 0, Math.PI * 2); ctx.fill();
+        }
+
+        var color = systemColor(intel, now);
+        if (intel && now - intel.ts < FRESH_MS && !intel.clear) {
+          ctx.beginPath(); ctx.fillStyle = color.replace(/[\d.]+\)$/, "0.18)");
+          ctx.arc(p.x, p.y, radius * 3.2, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.beginPath(); ctx.fillStyle = color; ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.fill();
+
+        if (inRange && !isYou) {
+          ctx.beginPath(); ctx.strokeStyle = colorForJumpsCss(jumps, 0.7); ctx.lineWidth = 1.5;
+          ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2); ctx.stroke();
+        }
+        if (isYou) {
+          ctx.beginPath(); ctx.strokeStyle = "#B388FF"; ctx.lineWidth = 2;
+          ctx.arc(p.x, p.y, radius + 4, 0, Math.PI * 2); ctx.stroke();
+        }
+
+        if (cam.scale > 1.4 || intel || isYou || inRange) {
+          ctx.fillStyle = color;
+          ctx.font = "11px ui-monospace, monospace";
+          ctx.fillText(s.name, p.x + 8, p.y + 4);
         }
       });
+    }
+    function colorForJumpsCss(jumps, alpha) {
+      var hex = jumps == null ? "#7A8899" : jumps === 0 ? "#FF5252" : jumps <= 2 ? "#FFB300" : jumps <= 5 ? "#4FC3F7" : "#7A8899";
+      var c = hexToRgb(hex);
+      return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + alpha + ")";
     }
 
     function toLocal(clientX, clientY) {
       var rect = canvas.getBoundingClientRect();
       return { x: clientX - rect.left, y: clientY - rect.top };
     }
-
     canvas.addEventListener("pointerdown", function (e) {
       canvas.setPointerCapture(e.pointerId);
       dragging = { id: e.pointerId, last: toLocal(e.clientX, e.clientY) };
@@ -499,131 +739,206 @@
     canvas.addEventListener("pointermove", function (e) {
       if (!dragging || dragging.id !== e.pointerId) return;
       var p = toLocal(e.clientX, e.clientY);
-      var rect = canvas.getBoundingClientRect();
-      var size = Math.min(rect.width, rect.height) * cam.scale;
-      cam.x -= (p.x - dragging.last.x) / size;
-      cam.y -= (p.y - dragging.last.y) / size;
+      cam.offsetX += p.x - dragging.last.x;
+      cam.offsetY += p.y - dragging.last.y;
       dragging.last = p;
       draw();
     });
-    ["pointerup", "pointercancel", "pointerleave"].forEach(function (evt) {
-      canvas.addEventListener(evt, function () { dragging = null; });
-    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (evt) { canvas.addEventListener(evt, function () { dragging = null; }); });
     canvas.addEventListener("wheel", function (e) {
       e.preventDefault();
-      cam.scale = Math.min(20, Math.max(0.3, cam.scale * (e.deltaY < 0 ? 1.15 : 0.87)));
+      cam.scale = Math.min(8, Math.max(0.5, cam.scale * (e.deltaY < 0 ? 1.15 : 0.87)));
       draw();
     }, { passive: false });
-
-    // Pinch-to-zoom for iPad: track two touches' distance independently of the pointer-drag above.
     var activeTouches = {};
     canvas.addEventListener("touchstart", function (e) {
-      Array.prototype.forEach.call(e.touches, function (t) { activeTouches[t.identifier] = t; });
       if (e.touches.length === 2) pinch = { start: touchDistance(e.touches), scale: cam.scale };
     }, { passive: true });
     canvas.addEventListener("touchmove", function (e) {
       if (e.touches.length === 2 && pinch) {
-        cam.scale = Math.min(20, Math.max(0.3, pinch.scale * (touchDistance(e.touches) / pinch.start)));
+        cam.scale = Math.min(8, Math.max(0.5, pinch.scale * (touchDistance(e.touches) / pinch.start)));
         draw();
       }
     }, { passive: true });
-    canvas.addEventListener("touchend", function (e) {
-      if (e.touches.length < 2) pinch = null;
-    }, { passive: true });
-    function touchDistance(touches) {
-      var dx = touches[0].clientX - touches[1].clientX;
-      var dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy) || 1;
-    }
+    canvas.addEventListener("touchend", function (e) { if (e.touches.length < 2) pinch = null; }, { passive: true });
+    function touchDistance(t) { var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY; return Math.sqrt(dx * dx + dy * dy) || 1; }
 
-    return { resize: resize, fit: fit, draw: draw };
+    return { resize: resize, rebuild: rebuild, draw: draw };
   })();
 
-  // ---------------------------------------------------------------------
-  // Settings -- channel selection and feed appearance, both round-tripped
-  // to the daemon exactly like the tablet's Settings tab. Per-device-only
-  // things (alert characters, alert radius) live on the tablet/app, not
-  // here, since there is nothing on the daemon side to sync them against.
-  // ---------------------------------------------------------------------
-  var COLOR_PRESETS = ["#D7E1EC", "#FFD37A", "#8FD9A8", "#FF9E9E", "#B7A6FF", "#9FE0E6"];
-  var sendClientMessage; // set once the socket exists
+  // =====================================================================
+  // Settings + character picker
+  // =====================================================================
+  var COLOR_PRESETS = ["#D7E1EC", "#FFFFFF", "#FFD180", "#FF8A80", "#B9F6CA", "#B388FF"];
+
+  function sinceLabel(millis) {
+    var minutes = Math.floor((Date.now() - millis) / 60000);
+    if (minutes < 1) return "now";
+    if (minutes < 60) return minutes + "m";
+    if (minutes < 1440) return Math.floor(minutes / 60) + "h";
+    return Math.floor(minutes / 1440) + "d";
+  }
+
+  function characterRowsHtml(idPrefix) {
+    var selected = LocalSettings.get().alertCharacters;
+    var names = Object.keys(state.locations);
+    if (!names.length) {
+      return '<div class="warn-text" style="color:var(--muted)">No characters seen yet. They appear once the daemon reads a Local channel.</div>';
+    }
+    var html = "";
+    if (!selected.length) {
+      html += '<div class="warn-text">None selected — the jump radius cannot be applied, so every hostile report alerts.</div>';
+    }
+    var sorted = names.map(function (n) { return state.locations[n]; }).sort(function (a, b) { return b.sinceMillis - a.sinceMillis; });
+    html += sorted.map(function (loc) {
+      var isSel = selected.indexOf(loc.characterName) >= 0;
+      return '<div class="char-row' + (isSel ? " selected" : "") + '" data-name="' + escapeHtml(loc.characterName) + '" data-prefix="' + idPrefix + '">' +
+        '<span class="name' + (isSel ? " selected" : "") + '">' + (isSel ? "✓  " : "  ") + escapeHtml(loc.characterName) + '</span>' +
+        '<span class="right"><span class="sys">' + escapeHtml(loc.systemName) + '</span><span class="since">' + sinceLabel(loc.sinceMillis) + '</span></span>' +
+        '</div>';
+    }).join("");
+    return html;
+  }
+
+  function bindCharacterRows(container) {
+    container.querySelectorAll(".char-row").forEach(function (row) {
+      row.addEventListener("click", function () {
+        LocalSettings.toggleCharacter(row.dataset.name);
+      });
+    });
+  }
 
   function renderSettings() {
     var list = document.getElementById("channel-list");
-    var known = state.channels.available.filter(function (c) { return !c.reserved; });
-    list.innerHTML = known.length
-      ? known.map(function (c) {
-        var checked = state.channels.selected.indexOf(c.name) >= 0;
-        return '<div class="channel-row"><span class="name">' + escapeHtml(c.name) + '</span>' +
-          '<input type="checkbox" data-channel="' + escapeHtml(c.name) + '" ' + (checked ? "checked" : "") + '></div>';
+    list.innerHTML = state.channels.available.length
+      ? state.channels.available.map(function (c) {
+        var selected = state.channels.selected.indexOf(c.name) >= 0;
+        return '<div class="channel-row"' + (c.reserved ? "" : ' data-channel="' + escapeHtml(c.name) + '" style="cursor:pointer"') + '>' +
+          '<div><div class="name' + (c.reserved ? " reserved" : selected ? " selected" : "") + '">' + escapeHtml(c.name) + '</div>' +
+          '<div class="sub">' + (c.reserved ? "always read — location tracking" : c.fileCount + " log file" + (c.fileCount === 1 ? "" : "s")) + '</div></div>' +
+          (c.reserved ? "" : '<label class="switch"><input type="checkbox" ' + (selected ? "checked" : "") + ' data-toggle="' + escapeHtml(c.name) + '"><span class="track"></span></label>') +
+          '</div>';
       }).join("")
-      : '<div class="channel-row"><span class="name" style="color:var(--muted)">No chat logs found yet.</span></div>';
-
-    list.querySelectorAll("input[type=checkbox]").forEach(function (box) {
+      : '<div class="desc">Connect to the daemon to see channels.</div>';
+    list.querySelectorAll("[data-toggle]").forEach(function (box) {
       box.addEventListener("change", function () {
-        var selected = known.filter(function (c) {
-          var input = list.querySelector('input[data-channel="' + CSS.escape(c.name) + '"]');
-          return input && input.checked;
-        }).map(function (c) { return c.name; });
-        sendClientMessage({ type: "setChannels", channels: selected });
+        var current = state.channels.selected.slice();
+        var name = box.dataset.toggle;
+        var i = current.indexOf(name);
+        if (box.checked && i < 0) current.push(name);
+        if (!box.checked && i >= 0) current.splice(i, 1);
+        sendClientMessage({ type: "setChannels", channels: current });
       });
     });
 
+    var charList = document.getElementById("char-list");
+    charList.innerHTML = characterRowsHtml("settings");
+    bindCharacterRows(charList);
+
+    var s = LocalSettings.get();
+    document.getElementById("radiusLabel").textContent = "Notify on hostile intel within " + s.alertJumpRadius + " jump" + (s.alertJumpRadius === 1 ? "" : "s");
+    document.getElementById("alertRadius").value = s.alertJumpRadius;
+    document.getElementById("radiusNote").textContent = s.alertJumpRadius === 0 ? "Alerts are off." : "0 turns alerts off.";
+    document.getElementById("alertOnClear").checked = s.alertOnClear;
+    document.getElementById("keepScreenOn").checked = s.keepScreenOn;
+
     var d = state.display;
-    document.getElementById("fontScale").value = Math.round((d.fontScale || 1) * 100);
-    document.getElementById("fontScaleLabel").textContent = Math.round((d.fontScale || 1) * 100) + "%";
-    document.getElementById("iconScale").value = Math.round((d.iconScale || 1) * 100);
-    document.getElementById("iconScaleLabel").textContent = Math.round((d.iconScale || 1) * 100) + "%";
+    document.getElementById("fontScaleLabel").textContent = "Font size: " + Math.round(d.fontScale * 100) + "%";
+    document.getElementById("fontScale").value = d.fontScale;
+    document.getElementById("iconScaleLabel").textContent = "Icon size: " + Math.round(d.iconScale * 100) + "%";
+    document.getElementById("iconScale").value = d.iconScale;
     document.getElementById("glow").checked = !!d.glowEnabled;
     document.getElementById("dropShadow").checked = !!d.dropShadowEnabled;
-
     var swatches = document.getElementById("colorSwatches");
     swatches.innerHTML = COLOR_PRESETS.map(function (hex) {
-      var selected = hex.toLowerCase() === (d.textColor || "").toLowerCase();
-      return '<div class="swatch' + (selected ? " selected" : "") + '" style="background:' + hex + '" data-color="' + hex + '"></div>';
+      return '<div class="swatch' + (hex.toLowerCase() === (d.textColor || "").toLowerCase() ? " selected" : "") + '" style="background:' + hex + '" data-color="' + hex + '"></div>';
     }).join("");
-    swatches.querySelectorAll(".swatch").forEach(function (el) {
-      el.addEventListener("click", function () { pushDisplay({ textColor: el.dataset.color }); });
-    });
+    swatches.querySelectorAll(".swatch").forEach(function (el) { el.addEventListener("click", function () { pushDisplay({ textColor: el.dataset.color }); }); });
   }
 
   function pushDisplay(partial) {
     var settings = Object.assign({}, state.display, partial);
-    state.display = settings;
     sendClientMessage({ type: "setDisplay", settings: settings });
   }
 
-  document.getElementById("fontScale").addEventListener("input", function (e) {
-    document.getElementById("fontScaleLabel").textContent = e.target.value + "%";
+  document.getElementById("alertRadius").addEventListener("input", function (e) {
+    LocalSettings.update({ alertJumpRadius: Number(e.target.value) });
+    renderSettings(); renderHeader();
   });
-  document.getElementById("fontScale").addEventListener("change", function (e) {
-    pushDisplay({ fontScale: Number(e.target.value) / 100 });
+  document.getElementById("alertOnClear").addEventListener("change", function (e) { LocalSettings.update({ alertOnClear: e.target.checked }); });
+  document.getElementById("keepScreenOn").addEventListener("change", function (e) {
+    LocalSettings.update({ keepScreenOn: e.target.checked });
+    applyWakeLock();
   });
-  document.getElementById("iconScale").addEventListener("input", function (e) {
-    document.getElementById("iconScaleLabel").textContent = e.target.value + "%";
-  });
-  document.getElementById("iconScale").addEventListener("change", function (e) {
-    pushDisplay({ iconScale: Number(e.target.value) / 100 });
-  });
+  document.getElementById("fontScale").addEventListener("input", function (e) { document.getElementById("fontScaleLabel").textContent = "Font size: " + Math.round(e.target.value * 100) + "%"; });
+  document.getElementById("fontScale").addEventListener("change", function (e) { pushDisplay({ fontScale: Number(e.target.value) }); });
+  document.getElementById("iconScale").addEventListener("input", function (e) { document.getElementById("iconScaleLabel").textContent = "Icon size: " + Math.round(e.target.value * 100) + "%"; });
+  document.getElementById("iconScale").addEventListener("change", function (e) { pushDisplay({ iconScale: Number(e.target.value) }); });
   document.getElementById("glow").addEventListener("change", function (e) { pushDisplay({ glowEnabled: e.target.checked }); });
   document.getElementById("dropShadow").addEventListener("change", function (e) { pushDisplay({ dropShadowEnabled: e.target.checked }); });
 
-  // ---------------------------------------------------------------------
-  // Header + nav
-  // ---------------------------------------------------------------------
-  function renderHeader() {
-    var names = Object.keys(state.locations);
-    var sub = "&nbsp;";
-    if (names.length) {
-      var first = state.locations[names[0]];
-      sub = escapeHtml(first.systemName) + (names.length > 1 ? " &middot; " + names.length + " known" : "");
-    }
-    document.getElementById("subtitle").innerHTML = sub;
+  function onLocalSettingsChanged() {
+    recomputeDistances();
+    renderHeader();
+    if (activeView === "feed") renderFeed();
+    if (activeView === "map") { mapView.rebuild(); mapView.draw(); }
+    if (activeView === "settings") renderSettings();
   }
+
+  async function applyWakeLock() {
+    try {
+      if (LocalSettings.get().keepScreenOn && document.visibilityState === "visible") {
+        wakeLock = await navigator.wakeLock.request("screen");
+      } else if (wakeLock) {
+        await wakeLock.release(); wakeLock = null;
+      }
+    } catch (e) { /* Wake Lock API unsupported or denied -- fails silently, matches a declined permission on Android. */ }
+  }
+  document.addEventListener("visibilitychange", applyWakeLock);
+
+  // Character picker dialog, reachable from the header -- same rows as Settings' section.
+  var dialogBackdrop = document.getElementById("char-dialog-backdrop");
+  document.getElementById("locbox").addEventListener("click", function () {
+    var list = document.getElementById("char-dialog-list");
+    list.innerHTML = characterRowsHtml("dialog");
+    bindCharacterRows(list);
+    dialogBackdrop.style.display = "flex";
+  });
+  document.getElementById("char-dialog-done").addEventListener("click", function () { dialogBackdrop.style.display = "none"; });
+  dialogBackdrop.addEventListener("click", function (e) { if (e.target === dialogBackdrop) dialogBackdrop.style.display = "none"; });
+
+  // =====================================================================
+  // Header -- mirrors MainActivity's StatusBar + EveClock.
+  // =====================================================================
+  function renderHeader() {
+    document.getElementById("dot").className = "dot" + (state.connection === "connected" ? " connected" : state.connection === "connecting" ? " connecting" : "");
+    var loc = primaryLocation();
+    var box = document.getElementById("locbox");
+    var extras = (LocalSettings.get().alertCharacters.length || 0) - 1;
+    if (loc) {
+      box.innerHTML = '<div class="system mono">' + escapeHtml(loc.systemName) + '</div><div class="sub">' + escapeHtml(loc.characterName) + (extras > 0 ? "  +" + extras : "") + '</div>';
+    } else if (!Object.keys(state.locations).length) {
+      box.innerHTML = '<div class="sub">no characters yet</div>';
+    } else {
+      box.innerHTML = '<div class="warn">tap to pick characters</div>';
+    }
+  }
+
+  var EVE_DOWNTIME_HOUR = 11;
+  function renderClock() {
+    var utc = new Date();
+    var hh = String(utc.getUTCHours()).padStart(2, "0");
+    var mm = String(utc.getUTCMinutes()).padStart(2, "0");
+    var inDowntime = utc.getUTCHours() === EVE_DOWNTIME_HOUR && utc.getUTCMinutes() <= 30;
+    var el = document.getElementById("clock");
+    el.textContent = hh + ":" + mm + (inDowntime ? " · DOWNTIME" : "");
+    el.className = "clock" + (inDowntime ? " downtime" : "");
+  }
+  setInterval(renderClock, 1000);
 
   function renderActive() {
     if (activeView === "feed") renderFeed();
-    else if (activeView === "map") { mapView.resize(); mapView.draw(); }
+    else if (activeView === "map") { mapView.rebuild(); mapView.resize(); mapView.draw(); }
     else if (activeView === "settings") renderSettings();
     renderHeader();
   }
@@ -637,26 +952,22 @@
     });
   });
 
-  // ---------------------------------------------------------------------
+  // =====================================================================
   // WebSocket
-  // ---------------------------------------------------------------------
-  function setStatus(connected, text) {
-    document.getElementById("dot").className = "dot" + (connected ? " connected" : "");
-    document.getElementById("status").textContent = text;
-  }
+  // =====================================================================
+  var sendClientMessage = function () {};
 
   function connect() {
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
     var ws = new WebSocket(proto + "//" + location.host + "/intel");
     var backoff = 1000;
+    state.connection = "connecting"; renderHeader();
 
-    sendClientMessage = function (msg) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
-    };
+    sendClientMessage = function (msg) { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
 
     ws.onopen = function () {
       backoff = 1000;
-      setStatus(true, "live");
+      state.connection = "connected"; renderHeader();
       sendClientMessage({ type: "hello", deviceName: "web:" + (navigator.userAgent || "browser"), protocolVersion: 1 });
     };
 
@@ -672,6 +983,7 @@
           state.channels = data.channels || state.channels;
           state.display = data.display || state.display;
           state.scopeRegionIds = data.scopeRegionIds || [];
+          recomputeDistances();
           renderActive();
           break;
         case "intel":
@@ -679,8 +991,11 @@
           break;
         case "location":
           state.locations[data.location.characterName] = data.location;
-          if (activeView === "map") mapView.draw();
+          recomputeDistances();
           renderHeader();
+          if (activeView === "feed") renderFeed();
+          if (activeView === "map") { mapView.rebuild(); mapView.draw(); }
+          if (activeView === "settings") renderSettings();
           break;
         case "characters":
           (data.characters || []).forEach(function (c) { state.characters[c.name] = c; });
@@ -702,7 +1017,6 @@
           if (activeView === "settings") renderSettings();
           break;
         case "heartbeat":
-          setStatus(true, "live");
           break;
         default:
           break;
@@ -710,15 +1024,18 @@
     };
 
     ws.onclose = function () {
-      setStatus(false, "reconnecting…");
+      state.connection = "disconnected"; renderHeader();
+      if (activeView === "feed") renderFeed();
       setTimeout(connect, backoff);
       backoff = Math.min(backoff * 2, 10000);
     };
     ws.onerror = function () { ws.close(); };
   }
 
+  renderClock();
   mapView.resize();
   loadUniverse();
+  applyWakeLock();
   connect();
 })();
 </script>
