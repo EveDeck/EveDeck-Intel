@@ -14,14 +14,17 @@ import java.util.Properties
 data class Config(
     val chatLogsDirectory: Path,
     val intelChannels: Set<String>,
-    val scopeRegions: Set<String>,
+    /** Manual per-channel region override, keyed by channel name. Empty unless the user set one. */
+    val channelRegionOverrides: Map<String, Set<String>>,
     val port: Int,
     val bindAddress: String,
     val startFromEnd: Boolean,
     val displaySettings: DisplaySettings,
 ) {
-    fun scopeRegionIds(universe: Universe): Set<Int> =
-        scopeRegions.mapNotNull { universe.regionIdsByLowerName[it.lowercase()] }.toSet()
+    fun channelRegionOverrideIds(universe: Universe): Map<String, Set<Int>> =
+        channelRegionOverrides
+            .mapValues { (_, names) -> names.mapNotNull { universe.regionIdsByLowerName[it.lowercase()] }.toSet() }
+            .filterValues { it.isNotEmpty() }
 
     companion object {
 
@@ -31,6 +34,14 @@ data class Config(
          */
         fun saveChannels(path: Path, channels: Collection<String>) {
             save(path, mapOf("intel.channels" to channels.sorted().joinToString(",")))
+        }
+
+        /**
+         * Sets or clears one channel's manual region override. An empty [regions] clears it, which
+         * falls back to whatever the channel's own MOTD says.
+         */
+        fun saveChannelRegionOverride(path: Path, channel: String, regions: Collection<String>) {
+            save(path, mapOf("$REGION_OVERRIDE_PREFIX$channel" to regions.sorted().joinToString(",")))
         }
 
         /** Mirrors [saveChannels]: called whenever either side changes the display settings. */
@@ -95,16 +106,26 @@ data class Config(
                 dropShadowEnabled = string("display.dropShadow", "false").toBooleanStrictOrNull() ?: false,
             ).coerced()
 
+            val channelRegionOverrides = properties.stringPropertyNames()
+                .filter { it.startsWith(REGION_OVERRIDE_PREFIX) }
+                .associate { key ->
+                    key.removePrefix(REGION_OVERRIDE_PREFIX) to set(key, "")
+                }
+                .filterValues { it.isNotEmpty() }
+
             return Config(
                 chatLogsDirectory = Paths.get(string("chatlogs.dir", defaultChatLogsDirectory())),
                 intelChannels = set("intel.channels", ""),
-                scopeRegions = set("scope.regions", ""),
+                channelRegionOverrides = channelRegionOverrides,
                 port = string("server.port", "31337").toIntOrNull() ?: 31337,
                 bindAddress = string("server.bind", "0.0.0.0"),
                 startFromEnd = string("logs.startFromEnd", "true").toBooleanStrictOrNull() ?: true,
                 displaySettings = display,
             )
         }
+
+        /** `region.override.<channel>=RegionA,RegionB` — the channel name may itself contain dots. */
+        private const val REGION_OVERRIDE_PREFIX = "region.override."
 
         /** EVE writes to Documents; OneDrive redirection is common, so check both. */
         fun defaultChatLogsDirectory(): String {

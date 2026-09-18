@@ -22,6 +22,8 @@ object ChatLogFormat {
     /** `EVE System > Channel changed to Local : 8DL-CP` — how we learn where a character is. */
     private val LOCAL_CHANGE = Regex("""^Channel changed to Local : (?<system>.+)$""")
 
+    private const val MOTD_MARKER = "Channel MOTD:"
+
     const val EVE_SYSTEM_AUTHOR = "EVE System"
 
     data class FileName(
@@ -100,6 +102,21 @@ object ChatLogFormat {
     fun parseLocalSystemChange(message: RawMessage): String? {
         if (message.author != EVE_SYSTEM_AUTHOR) return null
         return LOCAL_CHANGE.matchEntire(message.message)?.groups?.get("system")?.value?.trim()
+    }
+
+    /**
+     * Returns the free-form MOTD text if this is a channel's MOTD announcement, which EVE logs as
+     * the first message of every fresh session -- "EVE System > Channel MOTD: ...".
+     *
+     * Matched on the *last* occurrence of the label rather than the first: some corps' own MOTD
+     * text apparently started life as a copy of the system announcement and still literally begins
+     * with "Channel MOTD:" itself, which would otherwise make the boundary ambiguous.
+     */
+    fun parseChannelMotd(message: RawMessage): String? {
+        if (message.author != EVE_SYSTEM_AUTHOR) return null
+        val index = message.message.lastIndexOf(MOTD_MARKER, ignoreCase = true)
+        if (index < 0) return null
+        return message.message.substring(index + MOTD_MARKER.length).trim().ifEmpty { null }
     }
 
     /** `2026.09.17 17:32:24` in EVE time (UTC) to epoch millis. */

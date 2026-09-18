@@ -278,6 +278,10 @@ private fun IntelRow(state: IntelUiState, message: IntelMessage, now: Long) {
                     fontSize = (19 * state.display.fontScale).sp,
                 )
                 system?.let { token ->
+                    state.universe?.system(token.systemId)?.regionName?.let { region ->
+                        Spacer(Modifier.width(6.dp))
+                        RegionChip(state, region)
+                    }
                     state.sovHolderOf(token.systemId)?.let { holder ->
                         Spacer(Modifier.width(6.dp))
                         SovChip(state, holder.ticker ?: holder.name)
@@ -400,6 +404,20 @@ private fun Hostiles(state: IntelUiState, message: IntelMessage) {
 private fun ChannelChip(state: IntelUiState, channel: String) {
     Text(
         text = channel,
+        color = IntelColors.Muted,
+        fontSize = (12 * state.display.fontScale).sp,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier
+            .clip(RoundedCornerShape(3.dp))
+            .background(IntelColors.SurfaceRaised)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+@Composable
+private fun RegionChip(state: IntelUiState, region: String) {
+    Text(
+        text = region,
         color = IntelColors.Muted,
         fontSize = (12 * state.display.fontScale).sp,
         fontFamily = FontFamily.Monospace,

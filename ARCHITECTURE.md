@@ -95,8 +95,11 @@ Two numbers are reported:
 - `chatlogs.dir` — auto-detects `Documents/EVE/logs/Chatlogs` and the OneDrive-redirected variant.
 - `intel.channels` — comma separated. **Normally you don't edit this**: the tablet's Settings tab
   writes it. `Local` is always tailed regardless, because it is how location is tracked.
-- `scope.regions` — the regions the channel covers, taken from the channel MOTD. This is what makes
-  `9UY` resolve unambiguously to `9UY4-H`.
+- Region scope is no longer a config key: each channel's regions are read straight from its own
+  MOTD (`EVE System > Channel MOTD: ...`, the first message of every fresh session), which lists
+  covered regions "//"-separated. A per-channel manual override is available from the daemon's
+  Settings window for a channel whose MOTD doesn't name usable regions; the override always wins
+  when set. This is what makes `9UY` resolve unambiguously to `9UY4-H`.
 - `logs.startFromEnd` — `true` for normal operation; `false` replays each active file from the top.
 
 ---

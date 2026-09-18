@@ -4,7 +4,6 @@ import dev.eveintel.model.CharacterLocation
 import dev.eveintel.model.IntelMessage
 import dev.eveintel.model.Token
 import dev.eveintel.parse.ChatLogFormat
-import dev.eveintel.parse.IntelParser
 import dev.eveintel.parse.isIntel
 import dev.eveintel.parse.messageId
 import dev.eveintel.universe.Universe
@@ -28,7 +27,8 @@ import kotlinx.coroutines.sync.withLock
  */
 class IntelPipeline(
     private val universe: Universe,
-    private val parser: IntelParser,
+    /** One parser per channel, since each channel's own region scope can differ. */
+    private val parserFor: (channel: String) -> dev.eveintel.parse.IntelParser,
     /** Live: the tablet can change the selection without restarting the daemon. */
     private val intelChannels: StateFlow<Set<String>>,
     private val historySize: Int = 200,
@@ -70,7 +70,9 @@ class IntelPipeline(
         }
         if (!isNew) return
 
-        val parsed = mutex.withLock { correlate(tailed.channel, parser.parse(tailed.channel, tailed.message)) }
+        val parsed = mutex.withLock {
+            correlate(tailed.channel, parserFor(tailed.channel).parse(tailed.channel, tailed.message))
+        }
         if (!parsed.isIntel()) return
 
         mutex.withLock {

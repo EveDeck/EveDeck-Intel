@@ -24,6 +24,7 @@ import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JCheckBox
 import javax.swing.JColorChooser
+import javax.swing.JComboBox
 import javax.swing.JFileChooser
 import javax.swing.JFrame
 import javax.swing.JLabel
@@ -45,9 +46,9 @@ import javax.swing.event.DocumentListener
  * -- saving rewrites those keys in place and leaves comments and hand-edits alone.
  *
  * One setting applies live and the rest do not, and the window says so rather than pretending a
- * saved value took effect. Channel selection is live because the tailer reads it from a flow; the
- * port, the log directory and the scope regions are each read once while building long-lived
- * objects.
+ * saved value took effect. Channel selection and the region override are both live -- the tailer
+ * and the parser cache each read them from a flow; the port and the log directory are read once
+ * while building long-lived objects.
  */
 class SettingsWindow(
     private val configPath: Path,
@@ -55,6 +56,9 @@ class SettingsWindow(
     private val regionNames: List<String>,
     private val availableChannels: () -> List<ChannelInfo>,
     private val onChannelsChanged: (Set<String>) -> Unit,
+    /** Regions a channel's own MOTD claims to cover, shown as a hint next to its override. */
+    private val detectedRegions: (channel: String) -> List<String>,
+    private val onRegionOverridesChanged: (Map<String, Set<String>>) -> Unit,
     private val currentDisplay: () -> DisplaySettings,
     private val onDisplayChanged: (DisplaySettings) -> Unit,
     private val updateInfo: MutableStateFlow<VersionInfo?>,
@@ -85,6 +89,8 @@ class SettingsWindow(
         border = BorderFactory.createEmptyBorder(6, 8, 6, 8)
     }
     private val channelChecks = linkedMapOf<String, JCheckBox>()
+    private val regionChannelCombo = JComboBox<String>().apply { background = Theme.PANEL }
+    private val regionHint = Theme.hint(" ")
     private val regionFilter = JTextField(18)
     private val regionModel = DefaultListModel<String>()
     private val regionList = JList(regionModel).apply {
@@ -121,8 +127,15 @@ class SettingsWindow(
     private val glowCheck = JCheckBox("Glow").apply { background = Theme.BACKGROUND }
     private val dropShadowCheck = JCheckBox("Drop shadow").apply { background = Theme.BACKGROUND }
 
-    /** Held separately from the list: filtering the visible rows must not clear the selection. */
-    private val selectedRegions = linkedSetOf<String>().apply { addAll(initial.scopeRegions) }
+    /**
+     * Per-channel region override, keyed by channel name. Held separately from the list: filtering
+     * the visible rows, or switching which channel is being edited, must not lose a selection.
+     */
+    private val channelOverrides = initial.channelRegionOverrides
+        .mapValues { (_, names) -> linkedSetOf<String>().apply { addAll(names) } }
+        .toMutableMap()
+    private var currentRegionChannel: String? = null
+    private var populatingRegionChannel = false
 
     fun show() {
         val existing = frame
@@ -213,15 +226,29 @@ class SettingsWindow(
             weighty = 1.0,
         )
 
-        add(heading("Scope regions"), 0, row)
+        add(heading("Region override"), 0, row)
         add(
             transparent(BorderLayout(0, 5)).apply {
                 add(
-                    transparent(BorderLayout()).apply {
+                    transparent(BorderLayout(8, 0)).apply {
                         border = BorderFactory.createEmptyBorder(0, 0, 5, 0)
-                        add(regionFilter, BorderLayout.CENTER)
+                        add(Theme.hint("Channel:"), BorderLayout.WEST)
+                        add(regionChannelCombo, BorderLayout.CENTER)
                     },
                     BorderLayout.NORTH,
+                )
+                add(
+                    transparent(BorderLayout(0, 5)).apply {
+                        add(regionHint, BorderLayout.NORTH)
+                        add(
+                            transparent(BorderLayout()).apply {
+                                border = BorderFactory.createEmptyBorder(0, 0, 5, 0)
+                                add(regionFilter, BorderLayout.CENTER)
+                            },
+                            BorderLayout.CENTER,
+                        )
+                    },
+                    BorderLayout.CENTER,
                 )
                 add(
                     Theme.surface(
@@ -230,14 +257,18 @@ class SettingsWindow(
                             border = BorderFactory.createEmptyBorder()
                         },
                     ),
-                    BorderLayout.CENTER,
+                    BorderLayout.SOUTH,
                 )
-                add(Theme.hint("The regions the channel covers. This is what lets an abbreviation resolve."), BorderLayout.SOUTH)
             },
             1,
             row++,
             fill = GridBagConstraints.BOTH,
             weighty = 1.0,
+        )
+        add(
+            Theme.hint("Each channel's own MOTD normally sets this automatically. Pick regions here only to override it."),
+            1,
+            row++,
         )
 
         add(heading("Port"), 0, row)
@@ -317,6 +348,11 @@ class SettingsWindow(
             width = 2,
         )
 
+        regionChannelCombo.addActionListener {
+            if (populatingRegionChannel) return@addActionListener
+            currentRegionChannel = regionChannelCombo.selectedItem as? String
+            refreshRegions()
+        }
         regionFilter.document.addDocumentListener(
             object : DocumentListener {
                 override fun insertUpdate(event: DocumentEvent) = refreshRegions()
@@ -325,12 +361,14 @@ class SettingsWindow(
             },
         )
         regionList.addListSelectionListener { event ->
-            if (event.valueIsAdjusting) return@addListSelectionListener
+            if (event.valueIsAdjusting || populatingRegionChannel) return@addListSelectionListener
+            val channel = currentRegionChannel ?: return@addListSelectionListener
+            val selected = channelOverrides.getOrPut(channel) { linkedSetOf() }
             // Only the visible slice can change, so reconcile against it rather than replacing the
             // whole selection: a region filtered out of view stays selected.
             val visible = (0 until regionModel.size()).map { regionModel.get(it) }
             val chosen = regionList.selectedValuesList.toSet()
-            visible.forEach { if (it in chosen) selectedRegions.add(it) else selectedRegions.remove(it) }
+            visible.forEach { if (it in chosen) selected.add(it) else selected.remove(it) }
         }
 
         contentPane.background = Theme.BACKGROUND
@@ -371,6 +409,7 @@ class SettingsWindow(
             append("</body></html>")
         }
         refreshChannels()
+        refreshRegionChannels()
         refreshRegions()
         refreshUpdateBanner()
 
@@ -429,13 +468,16 @@ class SettingsWindow(
         runCatching { Desktop.getDesktop().browse(URI(url)) }
     }
 
-    private fun refreshChannels() {
+    /** Every channel worth showing: discovered, checked, or selected before this window opened. */
+    private fun knownChannelNames(): List<String> {
         val discovered = availableChannels().filterNot { it.reserved }.map { it.name }
-        // A selected channel whose log files have aged out still has to be shown, or saving the
-        // window would silently drop it.
-        val names = (discovered + channelChecks.filterValues { it.isSelected }.keys + initial.intelChannels)
+        return (discovered + channelChecks.filterValues { it.isSelected }.keys + initial.intelChannels)
             .distinct()
             .sorted()
+    }
+
+    private fun refreshChannels() {
+        val names = knownChannelNames()
         if (names == channelChecks.keys.toList()) return
 
         val selected = channelChecks.filterValues { it.isSelected }.keys + initial.intelChannels
@@ -455,15 +497,47 @@ class SettingsWindow(
         channelsPanel.repaint()
     }
 
+    private fun refreshRegionChannels() {
+        val names = knownChannelNames()
+        val currentItems = (0 until regionChannelCombo.itemCount).map { regionChannelCombo.getItemAt(it) }
+        if (names == currentItems && currentRegionChannel != null) return
+
+        if (currentRegionChannel !in names) currentRegionChannel = names.firstOrNull()
+
+        populatingRegionChannel = true
+        regionChannelCombo.removeAllItems()
+        names.forEach { regionChannelCombo.addItem(it) }
+        regionChannelCombo.selectedItem = currentRegionChannel
+        populatingRegionChannel = false
+    }
+
     private fun refreshRegions() {
+        val channel = currentRegionChannel
         val filter = regionFilter.text.trim().lowercase()
         val visible = regionNames.filter { filter.isEmpty() || it.lowercase().contains(filter) }
         regionModel.clear()
         visible.forEach { regionModel.addElement(it) }
+
+        if (channel == null) {
+            regionHint.text = "No channel to edit yet."
+            regionList.isEnabled = false
+            return
+        }
+        regionList.isEnabled = true
+        val detected = detectedRegions(channel)
+        regionHint.text = if (detected.isEmpty()) {
+            "MOTD hasn't named any regions yet for $channel."
+        } else {
+            "MOTD says: ${detected.joinToString()}"
+        }
+
+        val selected = channelOverrides[channel].orEmpty()
+        populatingRegionChannel = true
         regionList.selectedIndices = visible.withIndex()
-            .filter { it.value in selectedRegions }
+            .filter { it.value in selected }
             .map { it.index }
             .toIntArray()
+        populatingRegionChannel = false
     }
 
     private fun browseForLogs() {
@@ -490,12 +564,12 @@ class SettingsWindow(
             mapOf(
                 "chatlogs.dir" to logsField.text.trim(),
                 "intel.channels" to channels.joinToString(","),
-                "scope.regions" to selectedRegions.sorted().joinToString(","),
                 "server.port" to port.toString(),
                 "logs.startFromEnd" to startFromEnd.isSelected.toString(),
             ),
         )
         onChannelsChanged(channels.toSet())
+        onRegionOverridesChanged(channelOverrides.mapValues { (_, names) -> names.toSet() })
 
         onDisplayChanged(
             DisplaySettings(
@@ -509,13 +583,12 @@ class SettingsWindow(
 
         val needsRestart = logsField.text.trim() != initial.chatLogsDirectory.toString() ||
             port != initial.port ||
-            selectedRegions != initial.scopeRegions ||
             startFromEnd.isSelected != initial.startFromEnd
         note.foreground = if (needsRestart) Theme.WARN else Theme.MUTED
         note.text = if (needsRestart) {
-            "Saved. The port, log folder and regions apply on restart."
+            "Saved. The port and log folder apply on restart."
         } else {
-            "Saved. Channel selection is live."
+            "Saved. Channel selection and region overrides are live."
         }
         restartButton.isVisible = needsRestart && onRestart != null
         frame?.let { SwingUtilities.invokeLater { it.revalidate() } }

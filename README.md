@@ -48,8 +48,10 @@ Configuration lives in `eveintel.properties` beside the working directory:
 
 - `intel.channels` — your intel channels, comma separated. `Local` is always tailed as well,
   because it is how character location is tracked.
-- `scope.regions` — the regions the channel covers, from the channel MOTD. This is what lets `9UY`
-  resolve unambiguously to `9UY4-H`.
+- Region scope is detected automatically per channel from its own MOTD (`Detorid // Cache // ...`
+  is how alliances typically write it) — this is what lets `9UY` resolve unambiguously to
+  `9UY4-H`. Override it per channel from the daemon's Settings window if a channel's MOTD doesn't
+  name usable regions.
 - `server.port` — default 31337.
 
 ### Checking the parser against your own logs

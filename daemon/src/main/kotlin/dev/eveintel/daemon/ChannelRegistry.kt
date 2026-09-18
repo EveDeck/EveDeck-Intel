@@ -25,6 +25,8 @@ import kotlin.io.path.name
 class ChannelRegistry(
     private val directory: Path,
     private val selectedChannels: MutableStateFlow<Set<String>>,
+    /** Notified with each channel's most-recently-modified file, so its MOTD can be read for region scoping. */
+    private val onFileSeen: (channel: String, path: Path) -> Unit = { _, _ -> },
 ) {
     private val _available = MutableStateFlow<List<ChannelInfo>>(emptyList())
     val available: StateFlow<List<ChannelInfo>> = _available.asStateFlow()
@@ -45,7 +47,7 @@ class ChannelRegistry(
     suspend fun scan() = withContext(Dispatchers.IO) {
         if (!Files.isDirectory(directory)) return@withContext
 
-        data class Accumulator(var count: Int = 0, var lastModified: Long = 0L)
+        data class Accumulator(var count: Int = 0, var lastModified: Long = 0L, var latestPath: Path? = null)
 
         val byChannel = mutableMapOf<String, Accumulator>()
         Files.list(directory).use { stream ->
@@ -55,8 +57,15 @@ class ChannelRegistry(
                 val accumulator = byChannel.getOrPut(parsed.channel) { Accumulator() }
                 accumulator.count++
                 val modified = runCatching { Files.getLastModifiedTime(path).toMillis() }.getOrDefault(0L)
-                if (modified > accumulator.lastModified) accumulator.lastModified = modified
+                if (modified > accumulator.lastModified) {
+                    accumulator.lastModified = modified
+                    accumulator.latestPath = path
+                }
             }
+        }
+
+        byChannel.forEach { (name, accumulator) ->
+            if (name !in RESERVED) accumulator.latestPath?.let { onFileSeen(name, it) }
         }
 
         _available.value = byChannel

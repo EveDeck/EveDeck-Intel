@@ -9,9 +9,12 @@ chatlogs.dir=
 # "Local" is always tailed regardless, because it is how character location is tracked.
 intel.channels=alliance.intel
 
-# Regions the intel channel covers. Short forms like "9UY" are resolved against these first,
-# which is what keeps abbreviations unambiguous. Taken from the channel MOTD.
-scope.regions=Providence,Catch
+# Each channel's regions (used to resolve short forms like "9UY" unambiguously) are detected
+# automatically from that channel's own MOTD — nothing to fill in here. If a channel's MOTD
+# doesn't name usable regions, set an override from the daemon's Settings window instead. Power
+# users can still hand-edit an override here if they prefer; the channel name may itself contain
+# dots, so the key is matched by prefix rather than split:
+# region.override.alliance.intel=Providence,Catch
 
 # LAN WebSocket server. Do not port-forward this: there is no auth and no TLS.
 server.port=31337

@@ -63,12 +63,17 @@ fun main(args: Array<String>) {
     }
 
     val universe = loadUniverse()
-    val scopeRegionIds = config.scopeRegionIds(universe)
-    val parser = IntelParser(universe, scopeRegionIds)
+    val regionOverrides = MutableStateFlow(config.channelRegionOverrideIds(universe))
+    val regionResolver = ChannelRegionResolver(universe) { regionOverrides.value }
+    val channelParsers = ChannelParsers(universe, regionResolver)
 
     val selectedChannels = MutableStateFlow(config.intelChannels)
-    val registry = ChannelRegistry(config.chatLogsDirectory, selectedChannels)
-    val pipeline = IntelPipeline(universe, parser, selectedChannels)
+    val registry = ChannelRegistry(
+        config.chatLogsDirectory,
+        selectedChannels,
+        onFileSeen = { channel, path -> regionResolver.update(channel, path) },
+    )
+    val pipeline = IntelPipeline(universe, channelParsers::forChannel, selectedChannels)
     val displaySettings = MutableStateFlow(config.displaySettings)
     val updateInfo = MutableStateFlow<VersionInfo?>(null)
 
@@ -81,11 +86,23 @@ fun main(args: Array<String>) {
     println("EVE Intel daemon")
     println("  chat logs:  ${config.chatLogsDirectory}")
     println("  channels:   ${config.intelChannels.joinToString().ifEmpty { "(none — pick them on the tablet)" }}")
-    println("  scope:      ${config.scopeRegions.joinToString().ifEmpty { "whole universe" }}")
+    if (config.channelRegionOverrides.isNotEmpty()) {
+        println("  overrides:  " + config.channelRegionOverrides.entries.joinToString { (channel, regions) ->
+            "$channel -> ${regions.joinToString()}"
+        })
+    }
 
     runBlocking {
         registry.scan()
         println("  discovered: ${registry.available.value.joinToString { it.name }}")
+        println(
+            "  scope:      " + selectedChannels.value.joinToString().ifEmpty { "(no channels selected)" } +
+                " -> " + selectedChannels.value.associateWith { regionResolver.regionIdsFor(it) }
+                    .flatMap { (_, ids) -> ids.mapNotNull { universe.regions[it] } }
+                    .distinct()
+                    .ifEmpty { listOf("whole universe") }
+                    .joinToString(),
+        )
         registry.start(this)
 
         val tailer = LogTailer(
@@ -131,6 +148,17 @@ fun main(args: Array<String>) {
                 // channel, and 100-odd of those ahead of the first real name makes the list useless.
                 regionNames = universe.systems.map { it.regionName }.distinct().sorted(),
                 registry = registry,
+                detectedRegions = { channel ->
+                    regionResolver.detectedRegionIdsFor(channel).mapNotNull { universe.regions[it] }.sorted()
+                },
+                onRegionOverridesChanged = { overridesByName ->
+                    overridesByName.forEach { (channel, regions) ->
+                        Config.saveChannelRegionOverride(configPath, channel, regions)
+                    }
+                    regionOverrides.value = overridesByName
+                        .mapValues { (_, names) -> names.mapNotNull { universe.regionIdsByLowerName[it.lowercase()] }.toSet() }
+                        .filterValues { it.isNotEmpty() }
+                },
                 knownLocations = { pipeline.locations.value.size },
                 displaySettings = displaySettings,
                 updateInfo = updateInfo,
@@ -148,7 +176,7 @@ fun main(args: Array<String>) {
             configPath = configPath,
             pipeline = pipeline,
             channels = registry,
-            scopeRegionIds = scopeRegionIds,
+            scopeRegionIds = selectedChannels.value.flatMap { regionResolver.regionIdsFor(it) }.toSet(),
             characters = characters,
             universeStatus = universeStatus,
             images = images,
@@ -178,13 +206,27 @@ private fun validate(config: Config, args: Array<String>) {
     val limit = args.indexOf("--limit").takeIf { it >= 0 }?.let { args[it + 1].toIntOrNull() } ?: 40
     val show = args.indexOf("--show").takeIf { it >= 0 }?.let { args[it + 1].toIntOrNull() } ?: 40
     val universe = loadUniverse()
-    val scopeRegionIds = config.scopeRegionIds(universe)
-    val parser = IntelParser(universe, scopeRegionIds)
+    val overrides = config.channelRegionOverrideIds(universe)
 
     println("universe: ${universe.systems.size} systems, ${universe.ships.size} ships")
-    println("scope:    ${config.scopeRegions.joinToString().ifEmpty { "whole universe" }} -> ${scopeRegionIds.size} region(s)")
     println("channels: ${config.intelChannels.joinToString()}")
     println()
+
+    val parsers = mutableMapOf<String, IntelParser>()
+
+    /** Builds (and prints the derived scope for) a channel's parser from its own file's MOTD. */
+    fun parserFor(channel: String, fileText: String): IntelParser = parsers.getOrPut(channel) {
+        val motdRegionIds = fileText.lines().asSequence()
+            .mapNotNull { ChatLogFormat.parseMessage(it) }
+            .mapNotNull { ChatLogFormat.parseChannelMotd(it) }
+            .firstOrNull()
+            ?.let { dev.eveintel.parse.MotdRegions.parse(it, universe) }
+            ?: emptySet()
+        val regionIds = overrides[channel] ?: motdRegionIds
+        val label = regionIds.mapNotNull { universe.regions[it] }.ifEmpty { listOf("whole universe") }
+        println("  $channel -> ${label.joinToString()}")
+        IntelParser(universe, regionIds)
+    }
 
     val files = Files.list(config.chatLogsDirectory).use { stream ->
         stream.toList()
@@ -212,6 +254,7 @@ private fun validate(config: Config, args: Array<String>) {
     for (file in files) {
         val text = Files.readAllBytes(file).toString(StandardCharsets.UTF_16LE)
         val channel = ChatLogFormat.parseFileName(file.name)?.channel ?: continue
+        val parser = parserFor(channel, text)
         for (line in text.lines()) {
             val raw = ChatLogFormat.parseMessage(line) ?: continue
             if (raw.author == ChatLogFormat.EVE_SYSTEM_AUTHOR) continue
