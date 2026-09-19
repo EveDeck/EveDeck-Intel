@@ -1,0 +1,109 @@
+name: Scan Release with VirusTotal
+
+# Manual, one-off scan of a published release's assets. EveDeck-Intel has no automated release
+# pipeline (releases are cut by hand -- see intel/CLAUDE.md), so unlike EveDeck/EveDeck's
+# release.yml this isn't wired into a build step. It downloads the two assets already published
+# under the given tag, scans each with VirusTotal, and writes the results (report URL, verdict
+# summary, sha256) to a downloadable artifact so they can be copied into site/src/lib/release.ts.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to scan (e.g. intel-v0.3.1)"
+        required: true
+
+jobs:
+  scan:
+    runs-on: windows-latest
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download ${{ inputs.tag }} --repo ${{ github.repository }} --dir assets
+
+      - name: Scan each asset with VirusTotal
+        id: vt
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+        run: |
+          function Invoke-VtScan {
+            param([string]$Path)
+
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash.ToLower()
+            $result = [ordered]@{ file = (Split-Path $Path -Leaf); sha256 = $hash; vt_url = ""; vt_summary = ""; vt_clean = $null }
+
+            if (-not $env:VT_API_KEY) {
+              $result.vt_summary = "scan skipped (no API key configured)"
+              return $result
+            }
+
+            $headers = @{ "x-apikey" = $env:VT_API_KEY }
+            $stats = $null
+            $analysisId = $null
+
+            try {
+              $existing = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/$hash" -Headers $headers -Method Get -ErrorAction Stop
+              $stats = $existing.data.attributes.last_analysis_stats
+            } catch { }
+
+            if (-not $stats) {
+              try {
+                $upResp = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/files/upload_url" -Headers $headers -Method Get
+                $submitJson = & curl.exe -s -S -X POST -H "x-apikey: $($env:VT_API_KEY)" -F "file=@$Path" "$($upResp.data)"
+                if ($LASTEXITCODE -ne 0) { throw "curl.exe exited with code $LASTEXITCODE" }
+                $submit = $submitJson | ConvertFrom-Json
+                $analysisId = $submit.data.id
+
+                for ($i = 0; $i -lt 40; $i++) {
+                  Start-Sleep -Seconds 15
+                  $analysis = Invoke-RestMethod -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId" -Headers $headers -Method Get
+                  if ($analysis.data.attributes.status -eq "completed") {
+                    $stats = $analysis.data.attributes.stats
+                    break
+                  }
+                }
+              } catch {
+                Write-Warning "VirusTotal submission failed for $Path : $_"
+                $analysisId = $null
+              }
+            }
+
+            if (-not $stats) {
+              if ($analysisId) {
+                $result.vt_url = "https://www.virustotal.com/gui/file-analysis/$analysisId"
+                $result.vt_summary = "scan submitted, still processing -- check the report directly"
+              } else {
+                $result.vt_summary = "scan failed -- no report or analysis id"
+              }
+              return $result
+            }
+
+            $malicious = [int]$stats.malicious
+            $suspicious = [int]$stats.suspicious
+            $total = ($stats.PSObject.Properties.Value | Measure-Object -Sum).Sum
+            $flagged = $malicious + $suspicious
+
+            $result.vt_url = "https://www.virustotal.com/gui/file/$hash"
+            $result.vt_clean = ($flagged -eq 0)
+            $result.vt_summary = if ($flagged -eq 0) { "0/$total flagged" } else { "$flagged/$total flagged" }
+            return $result
+          }
+
+          $results = @()
+          Get-ChildItem -Path assets -File | ForEach-Object {
+            Write-Host "Scanning $($_.FullName)..."
+            $results += Invoke-VtScan -Path $_.FullName
+          }
+
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $results | ConvertTo-Json | Out-File -Encoding utf8 out/vt-results.json
+          Get-Content out/vt-results.json
+
+      - name: Upload results
+        uses: actions/upload-artifact@v7
+        with:
+          name: vt-results
+          path: out/vt-results.json
+          retention-days: 14
