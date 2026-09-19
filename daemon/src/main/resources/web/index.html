@@ -562,7 +562,11 @@
         var characterId = info && info.characterId;
         var icon = characterId ? '<img class="portrait" loading="lazy" onerror="this.remove()" width="' + portraitSize + '" height="' + portraitSize + '" src="' + imgUrl("characters", characterId, "portrait", 64) + '">' : "";
         var ticker = info && info.allianceTicker ? '<span class="ticker mono">[' + escapeHtml(info.allianceTicker) + ']</span>' : "";
-        return '<span class="pillitem">' + icon + '<span style="color:' + textColor + ';' + shadowDeclaration(textColor) + '">' + escapeHtml(name) + '</span>' + ticker + '</span>';
+        var nameStyle = 'color:' + textColor + ';' + shadowDeclaration(textColor);
+        var nameHtml = characterId
+          ? '<a href="https://zkillboard.com/character/' + characterId + '/" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="' + nameStyle + ';text-decoration:none">' + escapeHtml(name) + '</a>'
+          : '<span style="' + nameStyle + '">' + escapeHtml(name) + '</span>';
+        return '<span class="pillitem">' + icon + nameHtml + ticker + '</span>';
       }).join("") + (players.length > 6 ? '<span class="pillitem" style="color:var(--muted)">+' + (players.length - 6) + '</span>' : '') + '</div>';
     }
 
@@ -1205,6 +1209,7 @@
           state.channels = data.channels || state.channels;
           state.display = data.display || state.display;
           state.scopeRegionIds = data.scopeRegionIds || [];
+          (data.characters || []).forEach(function (c) { state.characters[c.name] = c; });
           recomputeDistances();
           renderActive();
           break;

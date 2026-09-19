@@ -162,11 +162,16 @@ class IntelParser(
             return Token.Ship(text = core, typeId = typeId, name = name, linked = linked)
         }
 
+        // Tried before matchSystem: a count shape ("+10", "5=", "5x", a bare number) can look like
+        // a digit-based system abbreviation to matchSystem's prefix scan, which would silently
+        // swallow a fleet-size report as a phantom system instead. A count never collides the other
+        // way -- matchCount only fires on a fully-numeric (plus a marker char) core, and no real
+        // system name is purely digits.
+        matchCount(core)?.let { return it }
+
         matchSystem(core)?.let {
             return Token.System(text = core, systemId = it.id, name = it.name, linked = linked)
         }
-
-        matchCount(core)?.let { return it }
 
         return null
     }

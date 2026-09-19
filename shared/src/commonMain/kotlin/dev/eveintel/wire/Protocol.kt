@@ -26,6 +26,7 @@ sealed interface ServerMessage {
         val serverTimeMillis: Long,
         val channels: Channels = Channels(),
         val display: DisplaySettings = DisplaySettings(),
+        val characters: List<CharacterInfo> = emptyList(),
     ) : ServerMessage
 
     /**

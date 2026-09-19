@@ -167,6 +167,7 @@ class IntelServer(
                         serverTimeMillis = System.currentTimeMillis(),
                         channels = channelState(),
                         display = display.value,
+                        characters = characters.known(),
                     )
                     send(Frame.Text(WireJson.encodeToString(ServerMessage.serializer(), snapshot)))
 
