@@ -33,6 +33,9 @@ export type Download = {
   sha256: string;
   requirement: string;
   detail: string;
+  virusTotalUrl?: string;
+  virusTotalSummary?: string;
+  virusTotalClean?: boolean;
 };
 
 export const DOWNLOADS: Download[] = [
@@ -46,7 +49,10 @@ export const DOWNLOADS: Download[] = [
     sha256: "d2d6cb948a7f54e762852dfc25101dcacb0e0add430d1f300bb995a60563fcee",
     requirement: "Windows 10 or 11, 64-bit — ~150 MB RAM, near-idle CPU while running",
     detail:
-      "Reads the chat logs and serves them to the tablet. Unzip and run — Java is bundled, so nothing has to be installed first."
+      "Reads the chat logs and serves them to the tablet. Unzip and run — Java is bundled, so nothing has to be installed first.",
+    virusTotalUrl: "https://www.virustotal.com/gui/file/d2d6cb948a7f54e762852dfc25101dcacb0e0add430d1f300bb995a60563fcee",
+    virusTotalSummary: "0/74 flagged",
+    virusTotalClean: true
   },
   {
     id: "apk",
@@ -58,6 +64,9 @@ export const DOWNLOADS: Download[] = [
     sha256: "101106de86b918fd95cf7e553297078aa95f357b807182bc94ee08afb026ce7a",
     requirement: "Android 8.0 or newer, tablet — ~170 MB RAM",
     detail:
-      "The feed, the map and the alerts. Sideloaded, so Android asks once whether to allow installs from your browser."
+      "The feed, the map and the alerts. Sideloaded, so Android asks once whether to allow installs from your browser.",
+    virusTotalUrl: "https://www.virustotal.com/gui/file/101106de86b918fd95cf7e553297078aa95f357b807182bc94ee08afb026ce7a",
+    virusTotalSummary: "0/74 flagged",
+    virusTotalClean: true
   }
 ];

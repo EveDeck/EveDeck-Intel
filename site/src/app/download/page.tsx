@@ -9,7 +9,34 @@ export const metadata: Metadata = {
     "Download EveDeck Intel: the Windows daemon and the Android tablet app, with checksums. Both halves are needed."
 };
 
+function VtBadge({
+  url,
+  summary,
+  clean,
+}: {
+  url: string;
+  summary?: string;
+  clean?: boolean;
+}) {
+  const flagged = clean === false;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium no-underline transition-colors ${
+        flagged
+          ? "border-warn/28 bg-warn/10 text-warn hover:border-warn/44 hover:bg-warn/16"
+          : "border-ok/24 bg-ok/10 text-ok hover:border-ok/40 hover:bg-ok/16"
+      }`}
+    >
+      🛡️ VirusTotal: {summary ?? "view report"}
+    </a>
+  );
+}
+
 export default function DownloadPage() {
+  const anyFlagged = DOWNLOADS.some((item) => item.virusTotalClean === false);
   return (
     <PageShell
       title={`Download ${VERSION}`}
@@ -23,28 +50,32 @@ export default function DownloadPage() {
       </p>
       <div className="not-prose mt-2 grid gap-4 sm:grid-cols-2">
         {DOWNLOADS.map((item) => (
-          <a
+          <div
             key={item.id}
-            href={item.href}
-            className="group flex flex-col overflow-hidden rounded-2xl border border-white/6 bg-gradient-to-b from-panel/92 to-panel-2/84 p-5 no-underline transition-colors hover:border-accent/25"
+            className="flex flex-col overflow-hidden rounded-2xl border border-white/6 bg-gradient-to-b from-panel/92 to-panel-2/84 p-5 transition-colors hover:border-accent/25"
           >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs font-semibold uppercase tracking-[.18em] text-muted/70">
-                {item.platform}
-              </span>
-              <span className="text-xs text-muted/70">{item.size}</span>
-            </div>
-            <h2 className="mt-2 font-display text-lg font-bold tracking-tight text-text group-hover:text-accent">
-              {item.title}
-            </h2>
-            <p className="mt-2 flex-1 text-[.92rem] leading-relaxed text-muted">{item.detail}</p>
-            <p className="mt-3 text-xs text-muted/70">{item.requirement}</p>
-            <p className="mt-3 break-all font-mono text-[.66rem] leading-relaxed text-muted/50">
-              {item.file}
-              <br />
-              sha256 {item.sha256}
-            </p>
-          </a>
+            <a href={item.href} className="group flex flex-1 flex-col no-underline">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs font-semibold uppercase tracking-[.18em] text-muted/70">
+                  {item.platform}
+                </span>
+                <span className="text-xs text-muted/70">{item.size}</span>
+              </div>
+              <h2 className="mt-2 font-display text-lg font-bold tracking-tight text-text group-hover:text-accent">
+                {item.title}
+              </h2>
+              <p className="mt-2 flex-1 text-[.92rem] leading-relaxed text-muted">{item.detail}</p>
+              <p className="mt-3 text-xs text-muted/70">{item.requirement}</p>
+              <p className="mt-3 break-all font-mono text-[.66rem] leading-relaxed text-muted/50">
+                {item.file}
+                <br />
+                sha256 {item.sha256}
+              </p>
+            </a>
+            {item.virusTotalUrl && (
+              <VtBadge url={item.virusTotalUrl} summary={item.virusTotalSummary} clean={item.virusTotalClean} />
+            )}
+          </div>
         ))}
       </div>
 
@@ -53,6 +84,16 @@ export default function DownloadPage() {
         <a href={RELEASE_PAGE}>{VERSION} release page</a>, which is where the checksums above come
         from. Next step: <Link href="/setup">setting it up</Link>.
       </p>
+
+      {anyFlagged && (
+        <p className="max-w-[560px] text-[.85rem] leading-relaxed text-muted/60">
+          Compiled from public source and published straight to GitHub Releases — nothing hidden
+          between commit and download. A flag is almost always one trigger-happy engine reacting to
+          an unsigned, freshly-built binary rather than a signature match. Open the report above to
+          see which engine flagged it. EveDeck Intel is open source — read the code or build it
+          yourself if you want certainty; running it is at your own risk either way.
+        </p>
+      )}
 
       <h2>Verifying what you downloaded</h2>
       <p>
