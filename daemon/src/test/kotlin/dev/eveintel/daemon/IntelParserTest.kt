@@ -91,6 +91,23 @@ class IntelParserTest {
     }
 
     @Test
+    fun `alphabetic-only shorthand resolves within the channel scope`() {
+        // Real traffic shows pilots dropping the digit/hyphen suffix entirely and typing only the
+        // leading letters -- a region's systems often share a prefix, so context (the channel's
+        // own scope) disambiguates it the same way a human reader would.
+        val system = assertNotNull(parser.matchSystem("jplr"))
+        assertEquals("JPL-RA", system.name)
+    }
+
+    @Test
+    fun `alphabetic-only shorthand under the length floor does not resolve`() {
+        // "jpl" is a real prefix of JPL-RA too, but three bare letters is exactly the kind of thing
+        // that risks colliding with an ordinary word elsewhere in the universe, so it needs the
+        // higher floor the digit/hyphen forms don't.
+        assertEquals(null, parser.matchSystem("jpl"))
+    }
+
+    @Test
     fun `ordinary words never resolve to systems`() {
         listOf("the", "going", "soon", "nice", "copy").forEach {
             assertEquals(null, parser.matchSystem(it), "'$it' should not be a system")

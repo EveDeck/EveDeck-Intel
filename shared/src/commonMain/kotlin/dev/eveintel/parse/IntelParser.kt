@@ -209,9 +209,18 @@ class IntelParser(
     /**
      * Resolves a system name or abbreviation.
      *
-     * Exact names match anywhere in the universe. Abbreviations only resolve when the token contains
-     * a digit or a hyphen — nullsec names always do, and that single rule keeps ordinary English
-     * words from turning into systems.
+     * Exact names match anywhere in the universe. Abbreviations containing a digit or hyphen
+     * (nullsec names always do) resolve against the channel's own regions first, widening to the
+     * whole universe if that's unambiguous — that single rule keeps ordinary English words from
+     * turning into systems.
+     *
+     * A `--validate` pass over three days of real traffic turned up a second shorthand: pilots
+     * routinely drop the digit/hyphen suffix entirely and type only the leading letters (a
+     * region's systems often share a prefix, so context alone disambiguates it for a human).
+     * That shorthand is purely alphabetic, so it can't reuse the digit/hyphen gate above. It gets
+     * its own stricter rule instead of loosening that one: a higher minimum length, and never
+     * widened past the channel's own regions — a bare word coincidentally prefixing some system
+     * name anywhere in New Eden is a real risk that scoping mostly closes off.
      */
     fun matchSystem(text: String): SolarSystem? {
         val core = text.trim().trim(*TRIM_CHARS).removeSuffix(LINK_MARKER).trim(*TRIM_CHARS)
@@ -221,8 +230,9 @@ class IntelParser(
 
         val hasDigit = core.any { it.isDigit() }
         val hasHyphen = core.contains('-')
-        if (!hasDigit && !hasHyphen) return null
-        if (core.length < MIN_ABBREVIATION) return null
+        val isAlphaShorthand = !hasDigit && !hasHyphen
+        if (isAlphaShorthand && core.length < MIN_ALPHA_ABBREVIATION) return null
+        if (!isAlphaShorthand && core.length < MIN_ABBREVIATION) return null
 
         val needle = core.uppercase().filter { it.isLetterOrDigit() }
         if (needle.isEmpty()) return null
@@ -231,6 +241,7 @@ class IntelParser(
             system.name.uppercase().filter { it.isLetterOrDigit() }.startsWith(needle)
         }
         if (candidates.size == 1) return candidates.single()
+        if (isAlphaShorthand) return null
         if (candidates.isEmpty() && scopeRegionIds.isNotEmpty()) {
             // Nothing in the channel's regions — fall back to the whole universe, but only when
             // the answer is unambiguous.
@@ -301,6 +312,7 @@ class IntelParser(
         /** Faction hull suffixes people shorten by dropping the trailing "Issue". */
         private val ISSUE_SUFFIXES = listOf(" navy", " fleet")
         private const val MIN_ABBREVIATION = 3
+        private const val MIN_ALPHA_ABBREVIATION = 4
         private val TRIM_CHARS = charArrayOf(',', '.', '!', '?', ':', ';', '(', ')', '[', ']', '"', '\'', ' ')
         private val PLAYER_SHIP = Regex("""^(.+?)\s+\((.+)\)(\*?)$""")
         private val SEGMENT_SPLIT = Regex("""\s{2,}""")

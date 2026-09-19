@@ -14,6 +14,7 @@ import dev.eveintel.model.IntelMessage
 import dev.eveintel.model.Keyword
 import dev.eveintel.parse.isHostile
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -30,6 +31,9 @@ class IntelService : LifecycleService() {
     private lateinit var settings: Settings
     private var client: IntelClient? = null
     private var connectionJob: Job? = null
+
+    private val pendingAlerts = mutableListOf<PendingAlert>()
+    private var flushJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -97,6 +101,12 @@ class IntelService : LifecycleService() {
      * When it cannot be worked out at all — nobody chosen, nobody seen in Local yet, the universe
      * still loading — the alert is raised anyway and says so, because going quiet about a hostile
      * is the worse failure. It is labelled rather than silently passed off as in-range.
+     *
+     * Alerts are buffered for [ALERT_COALESCE_WINDOW_MS] before posting. A coordinated hostile
+     * report can emit dozens of arrivals in a couple of seconds; posting one notification per
+     * message hit Android's per-app rate limit (~50/window) and the tail of the burst silently
+     * vanished, which looked to the user like the app had stopped working. Buffering caps how many
+     * notify() calls a burst can produce, regardless of its size.
      */
     private fun maybeAlert(message: IntelMessage) {
         val snapshot = settings.state.value
@@ -119,21 +129,65 @@ class IntelService : LifecycleService() {
             else -> " — range unknown"
         }
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ALERTS)
-            .setSmallIcon(R.drawable.ic_stat_intel)
-            .setContentTitle("$systemName$distanceText")
-            .setContentText(message.raw)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message.raw))
-            .setPriority(if ((jumps ?: 99) <= 1) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setAutoCancel(true)
-            .setContentIntent(activityIntent())
-            .build()
-
-        runCatching {
-            NotificationManagerCompatShim.notify(this, message.id.hashCode(), notification)
+        pendingAlerts += PendingAlert(
+            title = "$systemName$distanceText",
+            text = message.raw,
+            highPriority = (jumps ?: 99) <= 1,
+        )
+        if (flushJob?.isActive != true) {
+            flushJob = lifecycleScope.launch {
+                delay(ALERT_COALESCE_WINDOW_MS)
+                flushAlerts()
+            }
         }
     }
+
+    /**
+     * Posts whatever accumulated in [pendingAlerts] since the last flush.
+     *
+     * A single alert keeps its old look and its own notification id (message-derived), so ordinary
+     * traffic still stacks one entry per hostile sighting exactly as before. A burst collapses into
+     * one summary notification instead — its id is unique per flush, so successive bursts still
+     * stack in the shade rather than each overwriting the last.
+     */
+    private fun flushAlerts() {
+        val alerts = pendingAlerts.toList()
+        pendingAlerts.clear()
+        if (alerts.isEmpty()) return
+
+        val (notification, id) = if (alerts.size == 1) {
+            val alert = alerts.single()
+            NotificationCompat.Builder(this, CHANNEL_ALERTS)
+                .setSmallIcon(R.drawable.ic_stat_intel)
+                .setContentTitle(alert.title)
+                .setContentText(alert.text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(alert.text))
+                .setPriority(if (alert.highPriority) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .setContentIntent(activityIntent())
+                .build() to alert.title.hashCode()
+        } else {
+            val style = NotificationCompat.InboxStyle()
+            alerts.forEach { style.addLine(it.title) }
+            NotificationCompat.Builder(this, CHANNEL_ALERTS)
+                .setSmallIcon(R.drawable.ic_stat_intel)
+                .setContentTitle("${alerts.size} hostile alerts")
+                .setContentText(alerts.last().title)
+                .setStyle(style)
+                .setPriority(if (alerts.any { it.highPriority }) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .setContentIntent(activityIntent())
+                .build() to "burst-${System.currentTimeMillis()}".hashCode()
+        }
+
+        runCatching {
+            NotificationManagerCompatShim.notify(this, id, notification)
+        }
+    }
+
+    private data class PendingAlert(val title: String, val text: String, val highPriority: Boolean)
 
     /**
      * The platform asking us to stop, on a foreground-service type it time-limits.
@@ -201,6 +255,7 @@ class IntelService : LifecycleService() {
         private const val CHANNEL_SERVICE = "service"
         private const val CHANNEL_ALERTS = "alerts"
         private const val SERVICE_NOTIFICATION_ID = 1
+        private const val ALERT_COALESCE_WINDOW_MS = 1000L
 
         fun start(context: Context) {
             val intent = Intent(context, IntelService::class.java)

@@ -1,77 +1,57 @@
 package dev.eveintel.android
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
+import android.util.Log
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import dev.eveintel.android.ui.CharacterPickerDialog
-import dev.eveintel.android.ui.EveDeckBackground
-import dev.eveintel.android.ui.EveIntelTheme
-import dev.eveintel.android.ui.FeedScreen
-import dev.eveintel.android.ui.IntelColors
-import dev.eveintel.android.ui.MapScreen
-import dev.eveintel.android.ui.SettingsScreen
-import kotlinx.coroutines.delay
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    FEED("Intel", Icons.AutoMirrored.Filled.List),
-    MAP("Map", Icons.Filled.Public),
-    SETTINGS("Settings", Icons.Filled.Settings),
-}
-
+/**
+ * A thin WebView shell around the daemon's own web UI (daemon/src/main/resources/web/index.html).
+ *
+ * There used to be a full Compose UI here duplicating that page's feed/map/settings screens --
+ * two implementations of the same display, which is exactly the kind of drift that bites: a fix
+ * made to one silently doesn't apply to the other. The web UI is now the only UI; this activity's
+ * job is just to show it without a browser's chrome around it, and to keep [IntelService] (which
+ * this activity does not otherwise touch) reachable for the settings it needs.
+ *
+ * [IntelService] stays a native background service rather than folding into the web page: a
+ * closed or backgrounded WebView cannot run JavaScript to notice a hostile arriving, but a
+ * `specialUse` foreground service can. [SettingsBridge] is what keeps that service's alert
+ * settings in sync with whatever the user sets on the web page's own Settings tab, so there is
+ * still only one place to configure an alert -- it just writes to two stores under the hood.
+ */
 class MainActivity : ComponentActivity() {
+
+    private lateinit var settings: Settings
+    private lateinit var webView: WebView
+
+    /** The only host [webView]'s [WebViewClient] will navigate to -- see [buildWebView]. */
+    private var allowedHost: String? = null
 
     private val notificationPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -82,63 +62,138 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission()
         IntelService.start(this)
 
-        setContent {
-            val viewModel: IntelViewModel = viewModel()
-            val state by viewModel.state.collectAsStateWithLifecycle()
+        settings = Settings(this)
+        webView = buildWebView()
 
-            // Drives relative timestamps and map fading without recomposing on every frame.
-            var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    now = System.currentTimeMillis()
-                    delay(1_000)
-                }
-            }
+        val root = FrameLayout(this).apply {
+            addView(
+                webView,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT),
+            )
+            addView(
+                buildConnectButton(),
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.TOP or Gravity.END
+                    topMargin = dp(28)
+                    rightMargin = dp(20)
+                },
+            )
+        }
+        setContentView(root)
+        enterImmersiveMode()
 
-            LaunchedEffect(state.settings?.keepScreenOn) {
-                if (state.settings?.keepScreenOn == true) {
+        lifecycleScope.launch {
+            settings.state.collect { snapshot ->
+                if (snapshot.keepScreenOn) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 } else {
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
             }
+        }
 
-            var tab by remember { mutableStateOf(Tab.FEED) }
-            var pickingCharacters by remember { mutableStateOf(false) }
+        val current = settings.state.value
+        if (current.isConfigured) loadDaemon(current.serverHost, current.serverPort) else showConnectDialog(firstRun = true)
+    }
 
-            EveIntelTheme {
-                EveDeckBackground {
-                Scaffold(
-                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
-                    topBar = { StatusBar(state) { pickingCharacters = true } },
-                    bottomBar = {
-                        NavigationBar(containerColor = IntelColors.Chrome) {
-                            Tab.entries.forEach { entry ->
-                                NavigationBarItem(
-                                    selected = tab == entry,
-                                    onClick = { tab = entry },
-                                    icon = { Icon(entry.icon, contentDescription = entry.label) },
-                                    label = { Text(entry.label) },
-                                )
-                            }
-                        }
-                    },
-                ) { padding ->
-                    Box(Modifier.padding(padding)) {
-                        when (tab) {
-                            Tab.FEED -> FeedScreen(state, now)
-                            Tab.MAP -> MapScreen(state, now)
-                            Tab.SETTINGS -> SettingsScreen(state, viewModel)
-                        }
-                        if (pickingCharacters) {
-                            CharacterPickerDialog(state, viewModel) { pickingCharacters = false }
-                        }
-                    }
-                }
-                }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // A dialog, the notification shade, or a system overlay all clear the immersive flags;
+        // this is the standard "sticky immersive" re-assertion point once the window has focus
+        // back, rather than something the user has to fight with a repeated swipe.
+        if (hasFocus) enterImmersiveMode()
+    }
+
+    override fun onDestroy() {
+        webView.destroy()
+        super.onDestroy()
+    }
+
+    private fun enterImmersiveMode() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun buildWebView(): WebView {
+        val webView = WebView(this)
+        with(webView.settings) {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            // The web UI's screen-timeout fallback plays a silent canvas-captured video; this is
+            // what lets it autoplay without a tap, matching desktop Chrome's own allowance for a
+            // muted, inaudible video.
+            mediaPlaybackRequiresUserGesture = false
+        }
+        webView.setBackgroundColor(Color.parseColor("#0B0F14"))
+        // Exposed to whatever page is loaded, so navigation is locked to the configured daemon
+        // below -- an interface reachable from arbitrary web content is a real attack surface,
+        // and this one can write to this device's alert-notification settings.
+        webView.addJavascriptInterface(SettingsBridge(), "AndroidBridge")
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val host = request.url.host
+                if (host != null && host == allowedHost) return false
+                Log.w("MainActivity", "blocked navigation off the configured daemon: ${request.url}")
+                return true
             }
         }
+        return webView
     }
+
+    private fun loadDaemon(host: String, port: Int) {
+        allowedHost = host
+        webView.loadUrl("http://$host:$port/")
+    }
+
+    private fun showConnectDialog(firstRun: Boolean) {
+        val current = settings.state.value
+        val hostInput = EditText(this).apply {
+            hint = "Daemon's LAN IP, e.g. 192.168.1.50"
+            setText(current.serverHost)
+        }
+        val portInput = EditText(this).apply {
+            hint = "Port"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(current.serverPort.toString())
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val pad = dp(24)
+            setPadding(pad, dp(8), pad, 0)
+            addView(hostInput)
+            addView(portInput)
+        }
+
+        val builder = android.app.AlertDialog.Builder(this)
+            .setTitle("Connect to EveDeck Intel")
+            .setView(form)
+            .setCancelable(!firstRun)
+            .setPositiveButton("Connect") { _, _ ->
+                val host = hostInput.text.toString().trim()
+                val port = portInput.text.toString().trim().toIntOrNull() ?: 31337
+                if (host.isNotEmpty()) {
+                    settings.update { it.copy(serverHost = host, serverPort = port) }
+                    loadDaemon(host, port)
+                }
+            }
+        if (!firstRun) builder.setNegativeButton("Cancel", null)
+        builder.show()
+    }
+
+    /** Reopens [showConnectDialog] -- the only way to fix a daemon that moved to a new LAN IP. */
+    private fun buildConnectButton(): View = Button(this).apply {
+        text = "⚙"
+        textSize = 18f
+        setTextColor(Color.parseColor("#7A8899"))
+        setBackgroundColor(Color.TRANSPARENT)
+        alpha = 0.7f
+        setOnClickListener { showConnectDialog(firstRun = false) }
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
@@ -146,102 +201,38 @@ class MainActivity : ComponentActivity() {
             PackageManager.PERMISSION_GRANTED
         if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-}
 
-// EVE Online's in-game clock is always UTC ("EVE time"), and downtime starts 11:00 UTC and
-// nominally runs to ~11:15-11:30 (longer on patch days). The feed goes quiet during that window
-// because nothing new is being logged, not because anything is broken -- so this needs to read as
-// "the server is down for maintenance", not as a dead connection.
-private val EVE_CLOCK_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneOffset.UTC)
-
-@Composable
-private fun EveClock() {
-    var now by remember { mutableStateOf(Instant.now()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            now = Instant.now()
-            val utc = now.atZone(ZoneOffset.UTC)
-            val millisToNextMinute = 60_000L - (utc.second * 1_000L + utc.nano / 1_000_000L)
-            delay(millisToNextMinute)
-        }
-    }
-
-    val utc = now.atZone(ZoneOffset.UTC)
-    val inDowntime = utc.hour == 11 && utc.minute <= 30
-    Text(
-        text = EVE_CLOCK_FORMATTER.format(now) + if (inDowntime) " · DOWNTIME" else "",
-        color = if (inDowntime) IntelColors.Warning else IntelColors.Muted,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = if (inDowntime) FontWeight.Bold else FontWeight.Normal,
-        fontSize = 12.sp,
-    )
-}
-
-@Composable
-private fun StatusBar(state: IntelUiState, onPickCharacters: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(IntelColors.Chrome)
-            .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(9.dp)
-                .clip(CircleShape)
-                .background(
-                    when (state.connection) {
-                        ConnectionState.CONNECTED -> IntelColors.Clear
-                        ConnectionState.CONNECTING -> IntelColors.Warning
-                        ConnectionState.DISCONNECTED -> IntelColors.Hostile
-                    },
-                ),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text("INTEL", color = IntelColors.OnSurface, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-
-        Spacer(Modifier.weight(1f))
-
-        EveClock()
-        Spacer(Modifier.width(14.dp))
-
-        // The whole right-hand block is the shortcut into the character picker: this is where a
-        // user looks to ask "measured from where?", so it is where the answer is changed.
-        val location = state.primaryLocation
-        val extras = (state.settings?.alertCharacters?.size ?: 0) - 1
-        Column(
-            Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(onClick = onPickCharacters)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            if (location != null) {
-                Text(
-                    location.systemName,
-                    color = IntelColors.You,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                )
-                Text(
-                    location.characterName + if (extras > 0) "  +$extras" else "",
-                    color = IntelColors.Muted,
-                    fontSize = 11.sp,
-                )
-            } else if (state.locations.isEmpty()) {
-                Text("no characters yet", color = IntelColors.Muted, fontSize = 12.sp)
-            } else {
-                // Warning colour, because in this state the alert radius is doing nothing at all.
-                Text(
-                    "tap to pick characters",
-                    color = IntelColors.Warning,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
+    /**
+     * Lets the web page's own Settings tab (dev\eveintel\daemon\src\main\resources\web\index.html,
+     * `LocalSettings.save()`) be the single place a user configures alerts, while still keeping
+     * [IntelService]'s native SharedPreferences copy current -- that copy is what the background
+     * service reads when this WebView isn't even running.
+     */
+    private inner class SettingsBridge {
+        @JavascriptInterface
+        fun onSettingsChanged(json: String) {
+            val parsed = try {
+                Json.decodeFromString<WebSettingsPayload>(json)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "settings bridge: malformed payload from web UI", e)
+                return
+            }
+            settings.update { current ->
+                current.copy(
+                    alertCharacters = parsed.alertCharacters.toSet(),
+                    alertJumpRadius = parsed.alertJumpRadius,
+                    alertOnClear = parsed.alertOnClear,
+                    keepScreenOn = parsed.keepScreenOn,
                 )
             }
         }
     }
+
+    @Serializable
+    private data class WebSettingsPayload(
+        val alertCharacters: List<String> = emptyList(),
+        val alertJumpRadius: Int = 5,
+        val alertOnClear: Boolean = false,
+        val keepScreenOn: Boolean = true,
+    )
 }

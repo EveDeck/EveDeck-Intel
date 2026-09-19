@@ -104,6 +104,30 @@ class IntelServer(
                     }
                 }
 
+                // Backs the web client's "Add to Home Screen"/borderless mode -- see the comment
+                // on the fullscreen toggle in web/index.html for why the manifest's display mode
+                // alone isn't enough over plain LAN http.
+                get("/manifest.webmanifest") {
+                    val bytes = IntelServer::class.java.classLoader.getResourceAsStream("web/manifest.webmanifest")
+                        ?.use { it.readBytes() }
+                    if (bytes == null) {
+                        call.respond(HttpStatusCode.NotFound)
+                    } else {
+                        call.respondBytes(bytes = bytes, contentType = ContentType.Application.Json)
+                    }
+                }
+
+                get("/icon-256.png") {
+                    val bytes = IntelServer::class.java.classLoader.getResourceAsStream("icon-256.png")
+                        ?.use { it.readBytes() }
+                    if (bytes == null) {
+                        call.respond(HttpStatusCode.NotFound)
+                    } else {
+                        call.response.headers.append("Cache-Control", "public, max-age=86400")
+                        call.respondBytes(bytes = bytes, contentType = ContentType.Image.PNG)
+                    }
+                }
+
                 // Lets the web client build its own system/region/stargate graph and jump
                 // distances locally, exactly like the Android app does from its bundled copy --
                 // rather than duplicating that logic server-side per connected browser.

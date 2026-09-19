@@ -3,8 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0B0F14">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-256.png" sizes="256x256">
+<link rel="apple-touch-icon" href="/icon-256.png">
 <title>EveDeck Intel</title>
 <style>
   /* Colours lifted verbatim from android/ui/Theme.kt's IntelColors so this reads as the same app. */
@@ -14,7 +19,7 @@
     --surface-raised: #1B2530;
     --chrome: #0B0F14;
     --on-surface: #D7E1EC;
-    --muted: #7A8899;
+    --muted: #93A1B0;
     --hostile: #FF5252;
     --clear: #4CAF50;
     --warning: #FFB300;
@@ -27,6 +32,11 @@
     background: var(--background); color: var(--on-surface);
     font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* Kiosk hygiene for a wall-mounted panel: no pull-to-refresh, no rubber-band
+       overscroll, no accidental text selection or callout menu from a stray touch. */
+    overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
   }
   #app { display: flex; flex-direction: column; height: 100%; }
   .mono { font-family: ui-monospace, SFMono-Regular, "Roboto Mono", monospace; }
@@ -49,10 +59,30 @@
   #header .locbox .system { color: var(--you); font-weight: 700; font-size: 15px; }
   #header .locbox .sub { color: var(--muted); font-size: 11px; }
   #header .locbox .warn { color: var(--warning); font-weight: 700; font-size: 13px; }
+  #fs-btn {
+    flex: none; margin-left: 10px; background: none; border: 0; color: var(--muted);
+    cursor: pointer; padding: 2px 4px; border-radius: 4px; line-height: 1;
+  }
+  #fs-btn svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+
+  #conn-banner {
+    flex: 0 0 auto; display: none; align-items: center; justify-content: center; gap: 8px;
+    background: rgba(255,179,0,0.15); border-bottom: 1px solid rgba(255,179,0,0.4);
+    color: var(--warning); font-size: 13px; font-weight: 600; padding: 6px 10px; text-align: center;
+  }
+  #conn-banner.show { display: flex; }
+  #conn-banner .spin {
+    width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(255,179,0,0.35);
+    border-top-color: var(--warning); animation: spin 0.8s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
   #views { flex: 1 1 auto; min-height: 0; position: relative; }
-  .view { position: absolute; inset: 0; overflow: auto; display: none; -webkit-overflow-scrolling: touch; }
-  .view.active { display: block; }
+  .view {
+    position: absolute; inset: 0; overflow: auto; -webkit-overflow-scrolling: touch;
+    opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.15s ease;
+  }
+  .view.active { opacity: 1; visibility: visible; pointer-events: auto; }
 
   /* Feed */
   #view-feed { padding: 4px 8px 24px 8px; }
@@ -60,6 +90,12 @@
 
   .row { display: flex; align-items: flex-start; border-radius: 5px; padding: 8px 10px; margin: 1.5px 0; background: var(--surface); }
   .row.inrange { background: var(--surface-raised); border: 1px solid; }
+  .row.enter { animation: rowEnter 220ms ease; }
+  @keyframes rowEnter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .row.enter { animation: none; }
+    .view { transition: none; }
+  }
 
   .jumpbadge {
     flex: 0 0 auto; width: 48px; height: 40px; border-radius: 4px;
@@ -113,6 +149,8 @@
   .section { margin-bottom: 20px; }
   .section h2 { font-size: 13px; font-weight: 700; color: var(--accent); text-transform: uppercase; margin: 0 0 10px 0; }
   .section .desc { color: var(--muted); font-size: 14px; margin-bottom: 10px; }
+  .section .desc.small { font-size: 12px; }
+  .section .desc.spaced { margin-top: 10px; }
   .channel-row, .char-row {
     display: flex; align-items: center; justify-content: space-between;
     border-radius: 4px; padding: 8px 12px; margin-bottom: 6px; background: var(--surface);
@@ -122,6 +160,9 @@
   .channel-row .name.reserved { color: var(--muted); }
   .channel-row .sub { color: var(--muted); font-size: 13px; }
   .char-row.selected { background: rgba(79,195,247,0.15); }
+  .char-row:focus-visible, #nav button:focus-visible, .swatch:focus-visible, #header .locbox:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
   .char-row .name.selected { color: var(--accent); font-weight: 700; }
   .char-row .right { display: flex; gap: 8px; align-items: baseline; }
   .char-row .sys { font-family: ui-monospace, monospace; color: var(--muted); }
@@ -168,23 +209,28 @@
     <div class="title">INTEL</div>
     <div class="clock" id="clock"></div>
     <div class="locbox" id="locbox"></div>
+    <button id="fs-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen">
+      <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+    </button>
   </div>
 
+  <div id="conn-banner"><span class="spin"></span><span id="conn-banner-text"></span></div>
+
   <div id="views">
-    <div class="view active" id="view-feed">
+    <div class="view active" id="view-feed" role="tabpanel" aria-labelledby="nav-feed">
       <div id="update-banner-slot"></div>
       <div id="feed"></div>
       <div id="empty" style="display:none"></div>
     </div>
 
-    <div class="view" id="view-map">
+    <div class="view" id="view-map" role="tabpanel" aria-labelledby="nav-map">
       <canvas id="map-canvas"></canvas>
       <div id="map-caption"></div>
       <div id="map-hint">pinch to zoom &middot; drag to pan</div>
       <div id="map-empty"></div>
     </div>
 
-    <div class="view" id="view-settings">
+    <div class="view" id="view-settings" role="tabpanel" aria-labelledby="nav-settings">
       <div class="section">
         <h2>Intel channels</h2>
         <div class="desc">Every channel the daemon can see logs for. Tick the ones carrying intel. Local is always read, for your position.</div>
@@ -205,15 +251,15 @@
       </div>
       <div class="section">
         <h2>Feed appearance</h2>
-        <div class="desc" style="font-size:12px">Applies to every connected tablet — set from either the tablet or the PC's settings window.</div>
+        <div class="desc small">Applies to every connected tablet — set from either the tablet or the PC's settings window.</div>
         <div class="desc" id="fontScaleLabel"></div>
         <input type="range" id="fontScale" min="0.75" max="1.75" step="0.01">
-        <div class="desc" id="iconScaleLabel" style="margin-top:10px"></div>
+        <div class="desc spaced" id="iconScaleLabel"></div>
         <input type="range" id="iconScale" min="0.75" max="1.75" step="0.01">
-        <div class="desc" style="margin-top:10px">Text colour</div>
+        <div class="desc spaced">Text colour</div>
         <div class="swatches" id="colorSwatches"></div>
-        <div class="desc" style="font-size:12px">Doesn't affect the hostile/clear/warning status colours — those stay fixed, they carry meaning.</div>
-        <div class="desc" style="margin-top:6px">Text effect</div>
+        <div class="desc small">Doesn't affect the hostile/clear/warning status colours — those stay fixed, they carry meaning.</div>
+        <div class="desc spaced">Text effect</div>
         <div class="channel-row"><span>Glow</span><label class="switch"><input type="checkbox" id="glow"><span class="track"></span></label></div>
         <div class="channel-row"><span>Drop shadow</span><label class="switch"><input type="checkbox" id="dropShadow"><span class="track"></span></label></div>
       </div>
@@ -224,17 +270,17 @@
     </div>
   </div>
 
-  <div id="nav">
-    <button class="active" data-view="feed">
-      <svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h16v2H4z"/></svg>
+  <div id="nav" role="tablist" aria-label="Sections">
+    <button id="nav-feed" class="active" data-view="feed" role="tab" aria-selected="true" aria-controls="view-feed">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h16v2H4z"/></svg>
       Intel
     </button>
-    <button data-view="map">
-      <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.9 6H15.5a17 17 0 0 0-1.2-3.5A8 8 0 0 1 18.9 8zM12 4c.8 1.1 1.5 2.5 1.9 4h-3.8c.4-1.5 1.1-2.9 1.9-4zM4.3 14a8 8 0 0 1 0-4h3.9a17 17 0 0 0 0 4H4.3zm.8 2h3.4c.3 1.3.8 2.5 1.2 3.5A8 8 0 0 1 5.1 16zm3.4-8H5.1a8 8 0 0 1 4.6-3.5c-.4 1-.9 2.2-1.2 3.5zM12 20c-.8-1.1-1.5-2.5-1.9-4h3.8c-.4 1.5-1.1 2.9-1.9 4zm2.3-6H9.7a15 15 0 0 1 0-4h4.6a15 15 0 0 1 0 4zm.1 5.5c.5-1 .9-2.2 1.2-3.5h3.4a8 8 0 0 1-4.6 3.5zm1.6-5.5a17 17 0 0 0 0-4h3.9a8 8 0 0 1 0 4z"/></svg>
+    <button id="nav-map" data-view="map" role="tab" aria-selected="false" aria-controls="view-map">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.9 6H15.5a17 17 0 0 0-1.2-3.5A8 8 0 0 1 18.9 8zM12 4c.8 1.1 1.5 2.5 1.9 4h-3.8c.4-1.5 1.1-2.9 1.9-4zM4.3 14a8 8 0 0 1 0-4h3.9a17 17 0 0 0 0 4H4.3zm.8 2h3.4c.3 1.3.8 2.5 1.2 3.5A8 8 0 0 1 5.1 16zm3.4-8H5.1a8 8 0 0 1 4.6-3.5c-.4 1-.9 2.2-1.2 3.5zM12 20c-.8-1.1-1.5-2.5-1.9-4h3.8c-.4 1.5-1.1 2.9-1.9 4zm2.3-6H9.7a15 15 0 0 1 0-4h4.6a15 15 0 0 1 0 4zm.1 5.5c.5-1 .9-2.2 1.2-3.5h3.4a8 8 0 0 1-4.6 3.5zm1.6-5.5a17 17 0 0 0 0-4h3.9a8 8 0 0 1 0 4z"/></svg>
       Map
     </button>
-    <button data-view="settings">
-      <svg viewBox="0 0 24 24"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.4 1a7.5 7.5 0 0 0-1.7-1L14.5 2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.3 2.6a7.5 7.5 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6l2 1.6a7.4 7.4 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.4-1c.5.4 1.1.8 1.7 1l.3 2.6c0 .2.3.4.5.4h4c.2 0 .5-.2.5-.4l.3-2.6c.6-.2 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+    <button id="nav-settings" data-view="settings" role="tab" aria-selected="false" aria-controls="view-settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.4 7.4 0 0 0 0-2l2-1.6a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.4 1a7.5 7.5 0 0 0-1.7-1L14.5 2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.3 2.6a7.5 7.5 0 0 0-1.7 1l-2.4-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6l2 1.6a7.4 7.4 0 0 0 0 2l-2 1.6a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.4-1c.5.4 1.1.8 1.7 1l.3 2.6c0 .2.3.4.5.4h4c.2 0 .5-.2.5-.4l.3-2.6c.6-.2 1.2-.6 1.7-1l2.4 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
       Settings
     </button>
   </div>
@@ -267,7 +313,15 @@
         return Object.assign({}, defaults, raw);
       } catch (e) { return Object.assign({}, defaults); }
     }
-    function save() { try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (e) {} }
+    function save() {
+      try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (e) { console.error("settings: localStorage save failed", e); }
+      // Present only inside the Android WebView shell (see MainActivity.kt's SettingsBridge) --
+      // a plain browser tab has no such alerting counterpart to keep in sync, and window.AndroidBridge
+      // simply won't exist there, so this stays a no-op everywhere else.
+      if (window.AndroidBridge && window.AndroidBridge.onSettingsChanged) {
+        try { window.AndroidBridge.onSettingsChanged(JSON.stringify(value)); } catch (e) { console.error("settings: native bridge sync failed", e); }
+      }
+    }
     return {
       get: function () { return value; },
       update: function (partial) { value = Object.assign({}, value, partial); save(); onLocalSettingsChanged(); },
@@ -300,6 +354,7 @@
   var HISTORY_CAP = 300;
   var activeView = "feed";
   var wakeLock = null;
+  var noSleepVideo = null;
 
   // =====================================================================
   // Derived state -- mirrors IntelUiState's computed properties exactly.
@@ -361,7 +416,7 @@
     if (state.display.dropShadowEnabled) shadows.push("2px 2px 4px rgba(0,0,0,0.75)");
     return shadows.length ? "text-shadow:" + shadows.join(",") + ";" : "";
   }
-  var HEX = { clear: "#4CAF50", hostile: "#FF5252", warning: "#FFB300", accent: "#4FC3F7", muted: "#7A8899", you: "#B388FF" };
+  var HEX = { clear: "#4CAF50", hostile: "#FF5252", warning: "#FFB300", accent: "#4FC3F7", muted: "#93A1B0", you: "#B388FF" };
 
   /** IntelColors.forJumps -- closer is louder. Returns a hex string, not a CSS var, so alpha/shadow math works. */
   function colorForJumps(jumps) {
@@ -390,7 +445,7 @@
       universe.loaded = true;
       recomputeDistances();
       renderActive();
-    }).catch(function () {});
+    }).catch(function (e) { console.error("universe.json: load/parse failed, map + jump distances stay disabled", e); });
   }
   function bfs(origins) {
     var dist = {};
@@ -533,12 +588,30 @@
     if (nearTop) document.getElementById("view-feed").scrollTop = 0;
   }
 
+  // Live arrivals used to trigger a full renderFeed(), tearing down and rebuilding every row in
+  // the list for the sake of adding one at the top. Besides the wasted work, it reset scroll
+  // position whenever you weren't pinned to the top, so reading older intel while new lines kept
+  // arriving meant the list kept yanking back under you. This inserts just the new row, fades it
+  // in, and nudges scrollTop by its height so whatever you were reading stays put.
   function addMessage(message) {
     if (state.messages.some(function (m) { return m.id === message.id; })) return;
+    var wasEmpty = state.messages.length === 0;
     state.messages.unshift(message);
-    if (state.messages.length > HISTORY_CAP) state.messages.length = HISTORY_CAP;
+    var overflowed = state.messages.length > HISTORY_CAP;
+    if (overflowed) state.messages.length = HISTORY_CAP;
     maybeAlert(message);
-    if (activeView === "feed") renderFeed();
+    if (activeView !== "feed") return;
+    if (wasEmpty) { renderFeed(); return; }
+
+    var viewEl = document.getElementById("view-feed");
+    var feedEl = document.getElementById("feed");
+    var nearTop = viewEl.scrollTop < 40;
+    var row = renderRow(message);
+    row.classList.add("enter");
+    feedEl.insertBefore(row, feedEl.firstChild);
+    if (overflowed && feedEl.lastElementChild) feedEl.removeChild(feedEl.lastElementChild);
+    if (nearTop) viewEl.scrollTop = 0;
+    else viewEl.scrollTop += row.offsetHeight;
   }
 
   // Best-effort in-page alert while this tab is open. Android's alert runs as a background
@@ -561,7 +634,36 @@
       gain.gain.exponentialRampToValueAtTime(0.001, alertAudioCtx.currentTime + 0.4);
       osc.connect(gain).connect(alertAudioCtx.destination);
       osc.start(); osc.stop(alertAudioCtx.currentTime + 0.4);
-    } catch (e) {}
+    } catch (e) { console.error("alert tone: AudioContext failed", e); }
+    maybeShowBrowserNotification(message, isClear, jumps);
+  }
+
+  // Only worth showing when the tab isn't in view -- the tone already covers the foreground
+  // case, and a visible page popping a native notification on top of itself is just noise.
+  // A single fixed tag means a burst of alerts replaces the previous notification instead of
+  // stacking one per message, same reasoning as the Android app's own burst-coalescing fix.
+  var notificationPermissionRequested = false;
+  function maybeShowBrowserNotification(message, isClear, jumps) {
+    if (!("Notification" in window) || document.visibilityState !== "hidden") return;
+    if (Notification.permission === "denied") return;
+    if (Notification.permission === "default") {
+      if (notificationPermissionRequested) return;
+      notificationPermissionRequested = true;
+      Notification.requestPermission().then(function (perm) {
+        if (perm === "granted") showBrowserNotification(message, isClear, jumps);
+      }).catch(function (e) { console.error("Notification: permission request failed", e); });
+      return;
+    }
+    showBrowserNotification(message, isClear, jumps);
+  }
+
+  function showBrowserNotification(message, isClear, jumps) {
+    var system = tokensOfType(message, "system")[0];
+    var distanceText = jumps === 0 ? " — YOUR SYSTEM" : jumps != null ? " — " + jumps + " jump" + (jumps === 1 ? "" : "s") : "";
+    var title = (system ? system.name : "Intel") + distanceText;
+    try {
+      new Notification(title, { body: message.raw, tag: "intel-alert", renotify: true, silent: true });
+    } catch (e) { console.error("Notification: failed to show", e); }
   }
 
   setInterval(function () {
@@ -792,7 +894,8 @@
     var sorted = names.map(function (n) { return state.locations[n]; }).sort(function (a, b) { return b.sinceMillis - a.sinceMillis; });
     html += sorted.map(function (loc) {
       var isSel = selected.indexOf(loc.characterName) >= 0;
-      return '<div class="char-row' + (isSel ? " selected" : "") + '" data-name="' + escapeHtml(loc.characterName) + '" data-prefix="' + idPrefix + '">' +
+      return '<div class="char-row' + (isSel ? " selected" : "") + '" data-name="' + escapeHtml(loc.characterName) + '" data-prefix="' + idPrefix + '"' +
+        ' role="checkbox" aria-checked="' + isSel + '" tabindex="0">' +
         '<span class="name' + (isSel ? " selected" : "") + '">' + (isSel ? "✓  " : "  ") + escapeHtml(loc.characterName) + '</span>' +
         '<span class="right"><span class="sys">' + escapeHtml(loc.systemName) + '</span><span class="since">' + sinceLabel(loc.sinceMillis) + '</span></span>' +
         '</div>';
@@ -803,6 +906,11 @@
   function bindCharacterRows(container) {
     container.querySelectorAll(".char-row").forEach(function (row) {
       row.addEventListener("click", function () {
+        LocalSettings.toggleCharacter(row.dataset.name);
+      });
+      row.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
         LocalSettings.toggleCharacter(row.dataset.name);
       });
     });
@@ -851,9 +959,18 @@
     document.getElementById("dropShadow").checked = !!d.dropShadowEnabled;
     var swatches = document.getElementById("colorSwatches");
     swatches.innerHTML = COLOR_PRESETS.map(function (hex) {
-      return '<div class="swatch' + (hex.toLowerCase() === (d.textColor || "").toLowerCase() ? " selected" : "") + '" style="background:' + hex + '" data-color="' + hex + '"></div>';
+      var isSel = hex.toLowerCase() === (d.textColor || "").toLowerCase();
+      return '<div class="swatch' + (isSel ? " selected" : "") + '" style="background:' + hex + '" data-color="' + hex + '"' +
+        ' role="radio" aria-checked="' + isSel + '" aria-label="' + hex + '" tabindex="0"></div>';
     }).join("");
-    swatches.querySelectorAll(".swatch").forEach(function (el) { el.addEventListener("click", function () { pushDisplay({ textColor: el.dataset.color }); }); });
+    swatches.querySelectorAll(".swatch").forEach(function (el) {
+      el.addEventListener("click", function () { pushDisplay({ textColor: el.dataset.color }); });
+      el.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        pushDisplay({ textColor: el.dataset.color });
+      });
+    });
   }
 
   function pushDisplay(partial) {
@@ -885,33 +1002,93 @@
     if (activeView === "settings") renderSettings();
   }
 
-  async function applyWakeLock() {
+  // The Screen Wake Lock API is spec-gated to a secure context (https or localhost). This daemon
+  // is deliberately LAN-only plain http -- "no account, no TLS, nothing leaves your network" is a
+  // stated feature, not an oversight -- so navigator.wakeLock is simply absent on every real
+  // deployment of this page (a tablet hitting http://192.168.x.x:31337/). keepScreenOn defaulting
+  // to true never actually kept the screen on. The fallback below doesn't need a secure context:
+  // a silent, invisible video sourced from a canvas capture stream keeps Android's screen awake
+  // the same way NoSleep.js's technique does, entirely client-side, no asset to ship. Both run
+  // together -- the real API for whatever context someday serves this page over https, the video
+  // trick for every context that matters today.
+  function startNoSleepFallback() {
+    if (noSleepVideo) return;
     try {
-      if (LocalSettings.get().keepScreenOn && document.visibilityState === "visible") {
-        wakeLock = await navigator.wakeLock.request("screen");
-      } else if (wakeLock) {
-        await wakeLock.release(); wakeLock = null;
+      var canvas = document.createElement("canvas");
+      canvas.width = 1; canvas.height = 1;
+      canvas.getContext("2d").fillRect(0, 0, 1, 1);
+      var video = document.createElement("video");
+      video.setAttribute("playsinline", "");
+      video.setAttribute("muted", "");
+      video.muted = true;
+      video.loop = true;
+      video.style.cssText = "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;bottom:0;right:0;";
+      video.srcObject = canvas.captureStream(1);
+      document.body.appendChild(video);
+      video.play().catch(function (e) { console.error("no-sleep fallback: video play failed", e); });
+      noSleepVideo = video;
+    } catch (e) { console.error("no-sleep fallback: setup failed", e); }
+  }
+
+  function stopNoSleepFallback() {
+    if (!noSleepVideo) return;
+    noSleepVideo.pause();
+    noSleepVideo.remove();
+    noSleepVideo = null;
+  }
+
+  async function applyWakeLock() {
+    var shouldHold = LocalSettings.get().keepScreenOn && document.visibilityState === "visible";
+    if (shouldHold) {
+      try {
+        if (navigator.wakeLock) wakeLock = await navigator.wakeLock.request("screen");
+      } catch (e) {
+        // Wake Lock API unsupported, denied, or (the common case here) unavailable because this
+        // page isn't a secure context -- fails silently to the user, matches a declined permission
+        // on Android. Still logged for debugging. startNoSleepFallback() below covers this case
+        // regardless of whether the real API worked.
+        console.error("wake lock: Screen Wake Lock API failed, relying on the video fallback", e);
       }
-    } catch (e) { /* Wake Lock API unsupported or denied -- fails silently, matches a declined permission on Android. */ }
+      startNoSleepFallback();
+    } else {
+      if (wakeLock) {
+        try { await wakeLock.release(); } catch (e) { console.error("wake lock: release failed", e); }
+        wakeLock = null;
+      }
+      stopNoSleepFallback();
+    }
   }
   document.addEventListener("visibilitychange", applyWakeLock);
 
   // Character picker dialog, reachable from the header -- same rows as Settings' section.
   var dialogBackdrop = document.getElementById("char-dialog-backdrop");
-  document.getElementById("locbox").addEventListener("click", function () {
+  var locbox = document.getElementById("locbox");
+  locbox.setAttribute("role", "button");
+  locbox.setAttribute("tabindex", "0");
+  function openCharDialog() {
     var list = document.getElementById("char-dialog-list");
     list.innerHTML = characterRowsHtml("dialog");
     bindCharacterRows(list);
     dialogBackdrop.style.display = "flex";
+  }
+  locbox.addEventListener("click", openCharDialog);
+  locbox.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    openCharDialog();
   });
   document.getElementById("char-dialog-done").addEventListener("click", function () { dialogBackdrop.style.display = "none"; });
   dialogBackdrop.addEventListener("click", function (e) { if (e.target === dialogBackdrop) dialogBackdrop.style.display = "none"; });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && dialogBackdrop.style.display === "flex") dialogBackdrop.style.display = "none";
+  });
 
   // =====================================================================
   // Header -- mirrors MainActivity's StatusBar + EveClock.
   // =====================================================================
   function renderHeader() {
     document.getElementById("dot").className = "dot" + (state.connection === "connected" ? " connected" : state.connection === "connecting" ? " connecting" : "");
+    renderConnBanner();
     var loc = primaryLocation();
     var box = document.getElementById("locbox");
     var extras = (LocalSettings.get().alertCharacters.length || 0) - 1;
@@ -921,6 +1098,20 @@
       box.innerHTML = '<div class="sub">no characters yet</div>';
     } else {
       box.innerHTML = '<div class="warn">tap to pick characters</div>';
+    }
+  }
+
+  // Only the header dot showed connection state before, so losing the daemon while on the Map or
+  // Settings tab was invisible until you happened to switch back to Intel. This banner sits above
+  // every tab so a drop is never silent.
+  function renderConnBanner() {
+    var banner = document.getElementById("conn-banner");
+    var text = document.getElementById("conn-banner-text");
+    if (state.connection === "connected") {
+      banner.classList.remove("show");
+    } else {
+      text.textContent = state.connection === "connecting" ? "Connecting to the daemon…" : "Cannot reach the daemon — retrying…";
+      banner.classList.add("show");
     }
   }
 
@@ -946,7 +1137,11 @@
   document.querySelectorAll("#nav button").forEach(function (btn) {
     btn.addEventListener("click", function () {
       activeView = btn.dataset.view;
-      document.querySelectorAll("#nav button").forEach(function (b) { b.classList.toggle("active", b === btn); });
+      document.querySelectorAll("#nav button").forEach(function (b) {
+        var selected = b === btn;
+        b.classList.toggle("active", selected);
+        b.setAttribute("aria-selected", String(selected));
+      });
       document.querySelectorAll(".view").forEach(function (v) { v.classList.toggle("active", v.id === "view-" + activeView); });
       renderActive();
     });
@@ -957,10 +1152,15 @@
   // =====================================================================
   var sendClientMessage = function () {};
 
+  // backoff lives outside connect() deliberately: it used to be declared inside, so every
+  // reconnect's setTimeout(connect, backoff) call re-entered connect() and reset it to 1000
+  // before the doubling ever took effect. Every retry silently happened at a flat 1s. Jitter
+  // is added on top so multiple tabs/devices reconnecting after the same daemon restart don't
+  // all retry in lockstep.
+  var backoff = 1000;
   function connect() {
     var proto = location.protocol === "https:" ? "wss:" : "ws:";
     var ws = new WebSocket(proto + "//" + location.host + "/intel");
-    var backoff = 1000;
     state.connection = "connecting"; renderHeader();
 
     sendClientMessage = function (msg) { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); };
@@ -973,7 +1173,7 @@
 
     ws.onmessage = function (event) {
       var data;
-      try { data = JSON.parse(event.data); } catch (e) { return; }
+      try { data = JSON.parse(event.data); } catch (e) { console.error("intel ws: malformed message", e, event.data); return; }
       switch (data.type) {
         case "snapshot":
           state.messages = (data.messages || []).slice().reverse();
@@ -1026,11 +1226,30 @@
     ws.onclose = function () {
       state.connection = "disconnected"; renderHeader();
       if (activeView === "feed") renderFeed();
-      setTimeout(connect, backoff);
+      var jitter = backoff * (0.8 + Math.random() * 0.4);
+      setTimeout(connect, jitter);
       backoff = Math.min(backoff * 2, 10000);
     };
-    ws.onerror = function () { ws.close(); };
+    ws.onerror = function (e) { console.error("intel ws: error", e); ws.close(); };
   }
+
+  // Same reasoning as D:\automate's pcstats panel: the Fullscreen API works over plain HTTP,
+  // where Chrome's "Add to Home Screen" won't produce a real chromeless window since that needs
+  // a secure origin and this daemon is deliberately LAN-only http. Fullscreen + navigationUI:
+  // 'hide' is the one reliable way to get a borderless panel here.
+  function toggleFullscreen() {
+    var el = document.documentElement;
+    if (!document.fullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen || function () {})
+        .call(el, { navigationUI: "hide" });
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+    }
+  }
+  document.getElementById("fs-btn").addEventListener("click", toggleFullscreen);
+  // Double-tap anywhere is the practical gesture on a tablet with no keyboard; a single tap
+  // would fire on every accidental brush of the screen (and would fight the map's own taps).
+  document.addEventListener("dblclick", toggleFullscreen);
 
   renderClock();
   mapView.resize();
