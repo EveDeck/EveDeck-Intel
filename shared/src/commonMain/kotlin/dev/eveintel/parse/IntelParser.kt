@@ -98,6 +98,31 @@ class IntelParser(
             for (n in maxWindow downTo 1) {
                 val phrase = words.subList(i, i + n).joinToString(" ")
                 val token = matchEntity(phrase) ?: continue
+
+                // A pilot's own name can coincide with ship/system shorthand ("Mega Idiot" --
+                // "mega" aliases to Megathron): a bare single word is the only kind of match this
+                // ambiguous, since a real multi-word phrase ("Exequror Navy Issue") or an
+                // abbreviation long enough to need MIN_ABBREVIATION characters was clearly typed
+                // on purpose. Trust it only when the rest of the segment doesn't independently
+                // stand on its own either -- if the following words also resolve to something
+                // (the ordinary "system then ship" shape, or a ship followed by a count), this was
+                // never a name to begin with.
+                if (n == 1 && (token is Token.Ship || token is Token.System)) {
+                    var j = i + 1
+                    while (j < words.size && matchEntity(words[j]) == null) j++
+                    if (j > i + 1) {
+                        val nameWords = words.subList(i, j)
+                        val candidate = nameWords.joinToString(" ")
+                        if (looksLikeCharacterName(candidate)) {
+                            flushName()
+                            out.add(Token.Player(text = candidate, linked = nameWords.any { it.endsWith(LINK_MARKER) }))
+                            i = j
+                            matched = true
+                            break
+                        }
+                    }
+                }
+
                 flushName()
                 out.add(token)
                 i += n

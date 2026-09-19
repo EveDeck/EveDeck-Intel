@@ -2,6 +2,8 @@ package dev.eveintel.android
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -136,7 +138,14 @@ class MainActivity : ComponentActivity() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val host = request.url.host
                 if (host != null && host == allowedHost) return false
-                Log.w("MainActivity", "blocked navigation off the configured daemon: ${request.url}")
+                // The feed links out to dscan/adashboard reports pasted into intel channels --
+                // those need to actually open, just never inside this WebView (which stays locked
+                // to the daemon's own origin). Hand off to whatever the device's browser is.
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                } catch (e: ActivityNotFoundException) {
+                    Log.w("MainActivity", "no app to open ${request.url}", e)
+                }
                 return true
             }
         }

@@ -108,6 +108,18 @@ class IntelParserTest {
     }
 
     @Test
+    fun `a pilot name that collides with ship shorthand stays one player`() {
+        // "mega" aliases to Megathron in Vocabulary.SHIP_ALIASES -- a pilot whose name happens to
+        // start with it used to get shredded into a phantom ship plus a mangled name fragment.
+        val result = tokens("Mega Trouble*  proteus")
+        val players = result.filterIsInstance<Token.Player>()
+        assertEquals(listOf("Mega Trouble*"), players.map { it.text })
+        assertTrue(players.single().linked)
+        val ships = result.filterIsInstance<Token.Ship>()
+        assertEquals(listOf("Proteus"), ships.map { it.name })
+    }
+
+    @Test
     fun `ordinary words never resolve to systems`() {
         listOf("the", "going", "soon", "nice", "copy").forEach {
             assertEquals(null, parser.matchSystem(it), "'$it' should not be a system")

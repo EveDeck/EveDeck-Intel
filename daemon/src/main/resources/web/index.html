@@ -125,6 +125,8 @@
   .pillitem .ticker { color: var(--accent); font-size: 13px; margin-left: 4px; }
   .extras { font-weight: 700; font-size: 15px; margin-top: 4px; }
   .rawline { color: var(--muted); font-size: 14px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rawline a { color: var(--accent); text-decoration: none; }
+  .rawline a:hover, .rawline a:focus-visible { text-decoration: underline; }
 
   /* Update banner */
   .update-banner {
@@ -391,6 +393,26 @@
     return div.innerHTML;
   }
   function tokensOfType(message, type) { return message.tokens.filter(function (t) { return t.type === type; }); }
+
+  // Same pattern the parser matches server-side (IntelParser.kt's URL regex) -- dscan.info and
+  // adashboard.info drop links are common enough in real traffic that leaving them as inert text
+  // means retyping them by hand. Splits on the regex so only the URL segments become anchors;
+  // everything else still goes through escapeHtml, same as before.
+  var RAW_URL = /https?:\/\/\S+/g;
+  function linkifyRaw(text) {
+    var out = "";
+    var lastIndex = 0;
+    var match;
+    RAW_URL.lastIndex = 0;
+    while ((match = RAW_URL.exec(text))) {
+      out += escapeHtml(text.slice(lastIndex, match.index));
+      var url = match[0];
+      out += '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">' + escapeHtml(url) + '</a>';
+      lastIndex = match.index + url.length;
+    }
+    out += escapeHtml(text.slice(lastIndex));
+    return out;
+  }
   function age(millis) {
     var s = Math.max(0, Math.floor((Date.now() - millis) / 1000));
     if (s < 60) return s + "s";
@@ -549,7 +571,7 @@
       ? '<div class="extras" style="color:' + (isClear ? "var(--clear)" : "var(--warning)") + ';' + shadowDeclaration(isClear ? HEX.clear : HEX.warning) + '">' + escapeHtml(extras.join(" · ")) + '</div>'
       : "";
 
-    var rawHtml = '<div class="rawline">' + escapeHtml(message.author + ": " + message.raw) + '</div>';
+    var rawHtml = '<div class="rawline">' + escapeHtml(message.author + ": ") + linkifyRaw(message.raw) + '</div>';
 
     row.innerHTML = badgeHtml + '<div class="main">' + top + shipsHtml + playersHtml + extrasHtml + rawHtml + '</div>';
     return row;
