@@ -1226,6 +1226,7 @@
           break;
         case "characters":
           (data.characters || []).forEach(function (c) { state.characters[c.name] = c; });
+          if (activeView === "feed") renderFeed();
           break;
         case "sovereignty":
           state.sovereignty = { holders: data.holders || [], systems: data.systems || {} };
