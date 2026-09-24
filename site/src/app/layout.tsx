@@ -12,7 +12,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 const siteDescription =
-  "EveDeck Intel mirrors your EVE Online alliance intel channels onto an Android tablet over your own network — live feed, jump distance, region map and hostile alerts. No account, no API keys, nothing leaves your network.";
+  "intel.evedeck.space signs a tablet or phone into the EveDeck Intel LAN page served by the EveDeck desktop app.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://intel.evedeck.space"),
@@ -22,28 +22,19 @@ export const metadata: Metadata = {
   },
   description: siteDescription,
   applicationName: "EveDeck Intel",
-  keywords: [
-    "EVE Online",
-    "intel channel",
-    "intel tool",
-    "EveDeck Intel",
-    "nullsec",
-    "tablet",
-    "Android",
-    "jump distance"
-  ],
+  keywords: ["EVE Online", "intel channel", "intel tool", "EveDeck Intel", "nullsec", "tablet", "EVE SSO", "LAN"],
   // No canonical here on purpose: root metadata is inherited by every route, so a value of "/"
   // would canonicalize the whole site onto the homepage.
   openGraph: {
     type: "website",
     siteName: "EveDeck Intel",
-    title: "EveDeck Intel — your intel channels, on the tablet next to your keyboard.",
+    title: "EveDeck Intel login",
     description: siteDescription,
     locale: "en_US"
   },
   twitter: {
     card: "summary",
-    title: "EveDeck Intel — your intel channels, on the tablet next to your keyboard.",
+    title: "EveDeck Intel login",
     description: siteDescription
   }
 };

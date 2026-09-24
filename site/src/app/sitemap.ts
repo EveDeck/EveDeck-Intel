@@ -4,10 +4,7 @@ const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://intel.evedeck.spac
 
 const routes: { path: string; changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]; priority: number }[] = [
   { path: "/", changeFrequency: "monthly", priority: 1 },
-  { path: "/download", changeFrequency: "monthly", priority: 0.9 },
-  { path: "/setup", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/privacy", changeFrequency: "yearly", priority: 0.3 },
-  { path: "/legal-notice", changeFrequency: "yearly", priority: 0.3 }
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.6 }
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

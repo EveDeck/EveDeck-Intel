@@ -6,17 +6,13 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const navItems = [
-  { href: "/", label: "Overview" },
-  { href: "/download", label: "Download" },
-  { href: "/setup", label: "Setup" }
+  { href: "/", label: "Home" },
+  { href: "/privacy", label: "Privacy" }
 ] as const;
 
 const subtitleMap: Record<string, string> = {
   "/": "Intel",
-  "/download": "Download",
-  "/setup": "Setup",
-  "/privacy": "Privacy Policy",
-  "/legal-notice": "Legal Notice"
+  "/privacy": "Privacy"
 };
 
 function normalizePath(pathname: string): string {

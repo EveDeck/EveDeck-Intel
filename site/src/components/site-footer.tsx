@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export function SiteFooter() {
   return (
     <footer className="relative z-10 border-t border-white/6 bg-bg-0/55">
@@ -22,15 +20,15 @@ export function SiteFooter() {
           >
             EveDeck
           </a>
-          <Link href="/privacy" className="text-xs text-muted/70 no-underline transition-colors hover:text-accent">
+          <a href="/privacy" className="text-xs text-muted/70 no-underline transition-colors hover:text-accent">
             Privacy
-          </Link>
-          <Link
-            href="/legal-notice"
+          </a>
+          <a
+            href="https://evedeck.space/legal-notice"
             className="text-xs text-muted/70 no-underline transition-colors hover:text-accent"
           >
             Legal Notice
-          </Link>
+          </a>
         </div>
       </div>
     </footer>
