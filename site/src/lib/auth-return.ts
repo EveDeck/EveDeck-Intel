@@ -16,7 +16,7 @@ export function validateIntelReturnUrl(value: string | null): ReturnUrlValidatio
   if (url.username || url.password) return { ok: false, reason: "Return URL must not include user info." };
 
   const host = url.hostname.toLowerCase();
-  if (isAllowedIpv4(host) || host.endsWith(".local")) return { ok: true, url };
+  if (isAllowedIpv4(host) || host === "localhost" || host.endsWith(".local")) return { ok: true, url };
 
   return { ok: false, reason: "Return URL must point to a LAN address." };
 }
